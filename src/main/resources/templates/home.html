@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - EtnoMK</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        header {
+            background-color: #8B4513;
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: #FFD700;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 20px;
+        }
+
+        .hero {
+            background-color: #f5f5f5;
+            padding: 3rem 0;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .hero h2 {
+            font-size: 2.5rem;
+            color: #8B4513;
+            margin-bottom: 1rem;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #8B4513;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #A0522D;
+        }
+
+        .btn-secondary {
+            background-color: #666;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            color: #8B4513;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .record-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .record-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .record-image {
+            width: 100%;
+            height: 200px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+
+        .record-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .record-content {
+            padding: 1rem;
+        }
+
+        .record-content h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .record-meta {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .record-card a {
+            color: #8B4513;
+            text-decoration: none;
+        }
+
+        .record-card a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+
+        .no-records {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>🏛️ EtnoMK</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/records/view">Browse Records</a></li>
+                    <li><a href="/records/create">Add Record</a></li>
+                    <li><a href="/admin/dashboard">Admin</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="hero">
+            <h2>Welcome to EtnoMK</h2>
+            <p>Explore the rich cultural heritage and traditional items of Macedonia</p>
+            <div class="cta-buttons">
+                <a href="/records/view" class="btn btn-primary">Browse Records</a>
+                <a href="/records/create" class="btn btn-secondary">Add Your Item</a>
+            </div>
+        </div>
+
+        <h2 class="section-title">Recent Records</h2>
+
+        <div th:if="${records.isEmpty()}" class="no-records">
+            <p>No records found. Be the first to add one!</p>
+        </div>
+
+        <div class="grid" th:unless="${records.isEmpty()}">
+            <div class="record-card" th:each="record : ${records.stream().limit(6).toList()}">
+                <div class="record-image">
+                    <img th:if="${record.images} and ${not record.images.isEmpty()}" 
+                         th:src="${record.images[0].imagePath}" 
+                         th:alt="${record.title}">
+                    <span th:unless="${record.images} and ${not record.images.isEmpty()}">No Image</span>
+                </div>
+                <div class="record-content">
+                    <h3 th:text="${record.title}">Title</h3>
+                    <div class="record-meta">
+                        <p th:text="${record.category.name}">Category</p>
+                        <p th:text="${record.region.name}">Region</p>
+                    </div>
+                    <a th:href="@{/records/{id}(id=${record.recordId})}">View Details →</a>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 3rem;">
+            <a href="/records/view" class="btn btn-primary">View All Records</a>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 EtnoMK - Macedonian Cultural Heritage. All rights reserved.</p>
+    </footer>
+</body>
+</html>

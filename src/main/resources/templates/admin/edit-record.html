@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Record - EtnoMK</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        header {
+            background-color: #8B4513;
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: #FFD700;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 20px;
+        }
+
+        .breadcrumb {
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb a {
+            color: #8B4513;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        h2 {
+            color: #8B4513;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+
+        .form-container {
+            background: white;
+            padding: 2rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #8B4513;
+            box-shadow: 0 0 0 2px rgba(139, 69, 19, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+            margin-right: 1rem;
+        }
+
+        .btn-primary {
+            background-color: #8B4513;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #A0522D;
+        }
+
+        .btn-secondary {
+            background-color: #666;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>🏛️ EtnoMK</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/records/view">Browse Records</a></li>
+                    <li><a href="/records/create">Add Record</a></li>
+                    <li><a href="/admin/dashboard">Admin</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container" th:if="${record}">
+        <div class="breadcrumb">
+            <a href="/">Home</a> / <a href="/admin/dashboard">Admin</a> / <a href="/admin/records">Manage Records</a> / Edit
+        </div>
+
+        <h2>Edit Record</h2>
+
+        <div class="form-container">
+            <form method="POST" th:action="@{/admin/records/edit/{id}(id=${record.recordId})}">
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input type="text" id="title" name="title" th:value="${record.title}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" required th:text="${record.description}"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="regionId">Region</label>
+                        <select id="regionId" name="regionId" required>
+                            <option th:value="${record.region.regionId}" th:text="${record.region.name}" th:selected="true"></option>
+                            <option th:each="region : ${regions}" th:value="${region.regionId}" th:text="${region.name}"></option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="categoryId">Category</label>
+                        <select id="categoryId" name="categoryId" required>
+                            <option th:value="${record.category.categoryId}" th:text="${record.category.name}" th:selected="true"></option>
+                            <option th:each="category : ${categories}" th:value="${category.categoryId}" th:text="${category.name}"></option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="materialId">Material</label>
+                        <select id="materialId" name="materialId">
+                            <option value="">Select Material</option>
+                            <option th:if="${record.material}" th:value="${record.material.materialId}" th:text="${record.material.name}" th:selected="true"></option>
+                            <option th:each="material : ${materials}" th:value="${material.materialId}" th:text="${material.name}"></option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="techniqueId">Technique</label>
+                        <select id="techniqueId" name="techniqueId">
+                            <option value="">Select Technique</option>
+                            <option th:if="${record.technique}" th:value="${record.technique.techniqueId}" th:text="${record.technique.name}" th:selected="true"></option>
+                            <option th:each="technique : ${techniques}" th:value="${technique.techniqueId}" th:text="${technique.name}"></option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a href="/admin/records" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" th:unless="${record}">
+        <h2>Record Not Found</h2>
+        <p>The record you're trying to edit doesn't exist.</p>
+        <a href="/admin/records" class="btn btn-primary">Back to Records</a>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 EtnoMK - Macedonian Cultural Heritage. All rights reserved.</p>
+    </footer>
+</body>
+</html>

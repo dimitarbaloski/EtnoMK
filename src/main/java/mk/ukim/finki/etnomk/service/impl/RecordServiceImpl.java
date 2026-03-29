@@ -3,10 +3,12 @@ package mk.ukim.finki.etnomk.service.impl;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.repository.RecordRepository;
 import mk.ukim.finki.etnomk.service.RecordService;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
+@Service
 public class RecordServiceImpl implements RecordService {
 
     private final RecordRepository recordRepository;

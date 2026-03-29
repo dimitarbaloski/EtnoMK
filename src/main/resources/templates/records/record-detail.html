@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Detail - EtnoMK</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        header {
+            background-color: #8B4513;
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: #FFD700;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 20px;
+        }
+
+        .breadcrumb {
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb a {
+            color: #8B4513;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .detail-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .detail-image {
+            width: 100%;
+            height: 400px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .detail-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .detail-info h2 {
+            color: #8B4513;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #8B4513;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-value {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .description {
+            background: #f5f5f5;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+        }
+
+        .description h3 {
+            color: #8B4513;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+            margin-top: 1rem;
+        }
+
+        .btn-primary {
+            background-color: #8B4513;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #A0522D;
+        }
+
+        .btn-secondary {
+            background-color: #666;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .gallery {
+            margin-top: 2rem;
+        }
+
+        .gallery-title {
+            color: #8B4513;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .gallery-item {
+            width: 100%;
+            height: 150px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .detail-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>🏛️ EtnoMK</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/records/view">Browse Records</a></li>
+                    <li><a href="/records/create">Add Record</a></li>
+                    <li><a href="/admin/dashboard">Admin</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container" th:if="${record}">
+        <div class="breadcrumb">
+            <a href="/">Home</a> / <a href="/records/view">Browse Records</a> / <span th:text="${record.title}"></span>
+        </div>
+
+        <div class="detail-content">
+            <div class="detail-image">
+                <img th:if="${record.images} and ${not record.images.isEmpty()}" 
+                     th:src="${record.images[0].imagePath}" 
+                     th:alt="${record.title}">
+                <span th:unless="${record.images} and ${not record.images.isEmpty()}">No Image</span>
+            </div>
+
+            <div class="detail-info">
+                <h2 th:text="${record.title}"></h2>
+
+                <div class="info-group">
+                    <div class="info-label">Category</div>
+                    <div class="info-value" th:text="${record.category?.name}"></div>
+                </div>
+
+                <div class="info-group">
+                    <div class="info-label">Region</div>
+                    <div class="info-value" th:text="${record.region?.name}"></div>
+                </div>
+
+                <div th:if="${record.material}" class="info-group">
+                    <div class="info-label">Material</div>
+                    <div class="info-value" th:text="${record.material.name}"></div>
+                </div>
+
+                <div th:if="${record.technique}" class="info-group">
+                    <div class="info-label">Technique</div>
+                    <div class="info-value" th:text="${record.technique.name}"></div>
+                </div>
+
+                <div class="info-group">
+                    <div class="info-label">Date Created</div>
+                    <div class="info-value" th:text="${record.dateCreated}"></div>
+                </div>
+
+                <a href="/records/view" class="btn btn-primary">Back to Records</a>
+            </div>
+        </div>
+
+        <div class="description" th:if="${record.description}">
+            <h3>Description</h3>
+            <p th:text="${record.description}"></p>
+        </div>
+
+        <div class="gallery" th:if="${record.images} and ${not record.images.isEmpty()}">
+            <div class="gallery-title">Gallery</div>
+            <div class="gallery-grid">
+                <div class="gallery-item" th:each="image : ${record.images}">
+                    <img th:src="${image.imagePath}" th:alt="${record.title}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" th:unless="${record}">
+        <div class="breadcrumb">
+            <a href="/">Home</a> / Record Not Found
+        </div>
+        <h2>Record Not Found</h2>
+        <p>The record you're looking for doesn't exist.</p>
+        <a href="/records/view" class="btn btn-primary">Back to Records</a>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 EtnoMK - Macedonian Cultural Heritage. All rights reserved.</p>
+    </footer>
+</body>
+</html>
