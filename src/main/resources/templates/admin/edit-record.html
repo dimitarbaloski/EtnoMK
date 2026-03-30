@@ -218,7 +218,7 @@
                         <label for="regionId">Region</label>
                         <select id="regionId" name="regionId" required>
                             <option th:value="${record.region.regionId}" th:text="${record.region.name}" th:selected="true"></option>
-                            <option th:each="region : ${regions}" th:value="${region.regionId}" th:text="${region.name}"></option>
+                            <option th:each="region : ${regions}" th:value="${region.regionId}" th:text="${region.name}">Region</option>
                         </select>
                     </div>
 
@@ -226,7 +226,7 @@
                         <label for="categoryId">Category</label>
                         <select id="categoryId" name="categoryId" required>
                             <option th:value="${record.category.categoryId}" th:text="${record.category.name}" th:selected="true"></option>
-                            <option th:each="category : ${categories}" th:value="${category.categoryId}" th:text="${category.name}"></option>
+                            <option th:each="category : ${categories}" th:value="${category.categoryId}" th:text="${category.name}">Category</option>
                         </select>
                     </div>
                 </div>
@@ -237,7 +237,7 @@
                         <select id="materialId" name="materialId">
                             <option value="">Select Material</option>
                             <option th:if="${record.material}" th:value="${record.material.materialId}" th:text="${record.material.name}" th:selected="true"></option>
-                            <option th:each="material : ${materials}" th:value="${material.materialId}" th:text="${material.name}"></option>
+                            <option th:each="material : ${materials}" th:value="${material.materialId}" th:text="${material.name}">Material</option>
                         </select>
                     </div>
 
@@ -246,7 +246,7 @@
                         <select id="techniqueId" name="techniqueId">
                             <option value="">Select Technique</option>
                             <option th:if="${record.technique}" th:value="${record.technique.techniqueId}" th:text="${record.technique.name}" th:selected="true"></option>
-                            <option th:each="technique : ${techniques}" th:value="${technique.techniqueId}" th:text="${technique.name}"></option>
+                            <option th:each="technique : ${techniques}" th:value="${technique.techniqueId}" th:text="${technique.name}">Technique</option>
                         </select>
                     </div>
                 </div>

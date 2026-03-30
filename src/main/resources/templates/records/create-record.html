@@ -231,7 +231,7 @@
                         <label for="regionId">Region <span class="required">*</span></label>
                         <select id="regionId" name="regionId" required>
                             <option value="">Select Region</option>
-                            <option th:each="region : ${regions}" th:value="${region.regionId}" th:text="${region.name}"></option>
+                            <option th:each="region : ${regions}" th:value="${region.regionId}" th:text="${region.name}">Region</option>
                         </select>
                     </div>
 
@@ -239,7 +239,7 @@
                         <label for="categoryId">Category <span class="required">*</span></label>
                         <select id="categoryId" name="categoryId" required>
                             <option value="">Select Category</option>
-                            <option th:each="category : ${categories}" th:value="${category.categoryId}" th:text="${category.name}"></option>
+                            <option th:each="category : ${categories}" th:value="${category.categoryId}" th:text="${category.name}">Category</option>
                         </select>
                     </div>
                 </div>
@@ -249,7 +249,7 @@
                         <label for="materialId">Material</label>
                         <select id="materialId" name="materialId">
                             <option value="">Select Material</option>
-                            <option th:each="material : ${materials}" th:value="${material.materialId}" th:text="${material.name}"></option>
+                            <option th:each="material : ${materials}" th:value="${material.materialId}" th:text="${material.name}">Material</option>
                         </select>
                         <div class="help-text">Optional: wool, silk, metal, etc.</div>
                     </div>
@@ -258,7 +258,7 @@
                         <label for="techniqueId">Technique</label>
                         <select id="techniqueId" name="techniqueId">
                             <option value="">Select Technique</option>
-                            <option th:each="technique : ${techniques}" th:value="${technique.techniqueId}" th:text="${technique.name}"></option>
+                            <option th:each="technique : ${techniques}" th:value="${technique.techniqueId}" th:text="${technique.name}">Technique</option>
                         </select>
                         <div class="help-text">Optional: weaving, embroidery, filigree, etc.</div>
                     </div>
