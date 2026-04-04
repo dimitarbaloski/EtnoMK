@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface TechniqueService {
     List<Technique> findAll();
     Optional<Technique> findById(Long id);
+    Technique createTechnique(Technique technique);
+    void deleteTechnique(Long id);
 }

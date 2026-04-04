@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: layout(~{::main}, 'Manage Techniques - EtnoMK')}">
+<head>
+    <style>
+        .btn-back {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background-color: #666;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .btn-back:hover {
+            background-color: #555;
+        }
+
+        .btn-create {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background-color: #7A1C1C;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            margin-left: 1rem;
+        }
+
+        .btn-create:hover {
+            background-color: #8B4513;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .btn-delete {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background-color: #c82333;
+        }
+
+        .no-items {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            background: #F5E6C8;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+<main th:fragment="content">
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> / <a href="/admin/dashboard">Admin</a> / Manage Techniques
+    </div>
+
+    <h2>Manage Techniques</h2>
+
+    <div class="action-buttons">
+        <a href="/admin/dashboard" class="btn-back">← Back to Dashboard</a>
+        <a href="/admin/techniques/create" class="btn-create">+ Create New Technique</a>
+    </div>
+
+    <div th:if="${techniques.isEmpty()}" class="no-items">
+        <p>No techniques found. <a href="/admin/techniques/create">Create one now!</a></p>
+    </div>
+
+    <div th:unless="${techniques.isEmpty()}" class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Technique Name</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="technique : ${techniques}">
+                    <td th:text="${technique.name}"></td>
+                    <td>
+                        <form method="POST" th:action="@{/admin/techniques/delete/{id}(id=${technique.techniqueId})}" style="display:inline;" onsubmit="return confirm('Are you sure?');">
+                            <button type="submit" class="btn btn-delete">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</main>
+</body>
+</html>

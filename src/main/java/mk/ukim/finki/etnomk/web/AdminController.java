@@ -1,8 +1,10 @@
 package mk.ukim.finki.etnomk.web;
 
 import mk.ukim.finki.etnomk.model.Category;
+import mk.ukim.finki.etnomk.model.Material;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.model.Region;
+import mk.ukim.finki.etnomk.model.Technique;
 import mk.ukim.finki.etnomk.service.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -131,4 +133,51 @@ public class AdminController {
         return "redirect:/admin/categories";
     }
 
+    // Material Management
+    @GetMapping("/materials")
+    public String manageMaterials(Model model) {
+        model.addAttribute("materials", materialService.findAll());
+        return "admin/manage-materials";
+    }
+
+    @GetMapping("/materials/create")
+    public String createMaterialForm() {
+        return "admin/create-material";
+    }
+
+    @PostMapping("/materials/create")
+    public String createMaterial(@ModelAttribute Material material) {
+        materialService.createMaterial(material);
+        return "redirect:/admin/materials";
+    }
+
+    @PostMapping("/materials/delete/{id}")
+    public String deleteMaterial(@PathVariable Long id) {
+        materialService.deleteMaterial(id);
+        return "redirect:/admin/materials";
+    }
+
+    // Technique Management
+    @GetMapping("/techniques")
+    public String manageTechniques(Model model) {
+        model.addAttribute("techniques", techniqueService.findAll());
+        return "admin/manage-techniques";
+    }
+
+    @GetMapping("/techniques/create")
+    public String createTechniqueForm() {
+        return "admin/create-technique";
+    }
+
+    @PostMapping("/techniques/create")
+    public String createTechnique(@ModelAttribute Technique technique) {
+        techniqueService.createTechnique(technique);
+        return "redirect:/admin/techniques";
+    }
+
+    @PostMapping("/techniques/delete/{id}")
+    public String deleteTechnique(@PathVariable Long id) {
+        techniqueService.deleteTechnique(id);
+        return "redirect:/admin/techniques";
+    }
 }

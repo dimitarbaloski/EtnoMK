@@ -26,4 +26,14 @@ public class TechniqueServiceImpl implements TechniqueService {
     public Optional<Technique> findById(Long id) {
         return techniqueRepository.findById(id);
     }
+
+    @Override
+    public Technique createTechnique(Technique technique) {
+        return techniqueRepository.save(technique);
+    }
+
+    @Override
+    public void deleteTechnique(Long id) {
+        techniqueRepository.deleteById(id);
+    }
 }

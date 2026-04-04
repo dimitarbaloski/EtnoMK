@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: layout(~{::main}, 'Contact - EtnoMK')}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -179,20 +181,8 @@
     </style>
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <h1>🏛️ EtnoMK</h1>
-            <nav>
-                <ul>
-                    <li><a href="/">Home</a></li>
-                    <li><a href="/records/view">Browse Records</a></li>
-                    <li><a href="/records/create">Add Record</a></li>
-                    <li><a href="/admin/dashboard">Admin</a></li>
-                    <li><a href="/contact">Contact</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
+<main th:fragment="content">
+
 
     <div class="container" th:if="${record}">
         <div class="breadcrumb">
@@ -268,5 +258,6 @@
     <footer>
         <p>&copy; 2026 EtnoMK - Macedonian Cultural Heritage. All rights reserved.</p>
     </footer>
+</main>
 </body>
 </html>

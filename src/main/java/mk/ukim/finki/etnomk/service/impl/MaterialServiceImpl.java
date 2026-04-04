@@ -26,4 +26,14 @@ public class MaterialServiceImpl implements MaterialService {
     public Optional<Material> findById(Long id) {
         return materialRepository.findById(id);
     }
+
+    @Override
+    public Material createMaterial(Material material) {
+        return materialRepository.save(material);
+    }
+
+    @Override
+    public void deleteMaterial(Long id) {
+        materialRepository.deleteById(id);
+    }
 }

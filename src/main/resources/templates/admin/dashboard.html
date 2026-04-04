@@ -1,84 +1,9 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: layout(~{::main}, 'Admin Dashboard - EtnoMK')}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - EtnoMK</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-        }
-
-        header {
-            background-color: #8B4513;
-            color: white;
-            padding: 1rem 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .header-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        h1 {
-            font-size: 2rem;
-        }
-
-        nav ul {
-            list-style: none;
-            display: flex;
-            gap: 2rem;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-
-        nav a:hover {
-            color: #FFD700;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 20px;
-        }
-
-        .breadcrumb {
-            margin-bottom: 2rem;
-            font-size: 0.9rem;
-        }
-
-        .breadcrumb a {
-            color: #8B4513;
-            text-decoration: none;
-        }
-
-        .breadcrumb a:hover {
-            text-decoration: underline;
-        }
-
-        h2 {
-            color: #8B4513;
-            margin-bottom: 2rem;
-            font-size: 2rem;
-        }
-
         .admin-menu {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -88,41 +13,44 @@
 
         .menu-card {
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            border: 1px solid #e8d8b8;
+            border-radius: 12px;
             padding: 2rem;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+            transition: transform 0.3s, box-shadow 0.3s;
         }
 
         .menu-card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
         }
 
         .menu-card h3 {
-            color: #8B4513;
+            color: #5C1A1A;
             margin-bottom: 1rem;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
         }
 
         .menu-card p {
             color: #666;
             margin-bottom: 1.5rem;
+            font-size: 0.95rem;
         }
 
         .menu-card a {
             display: inline-block;
             padding: 0.75rem 1.5rem;
-            background-color: #8B4513;
+            background-color: #7A1C1C;
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 6px;
+            font-weight: 500;
             transition: background-color 0.3s;
         }
 
         .menu-card a:hover {
-            background-color: #A0522D;
+            background-color: #8B4513;
         }
 
         .stats {
@@ -133,15 +61,15 @@
         }
 
         .stat-card {
-            background: #f5f5f5;
+            background: #F5E6C8;
             padding: 1.5rem;
-            border-radius: 8px;
+            border-radius: 12px;
             text-align: center;
         }
 
         .stat-number {
             font-size: 2.5rem;
-            color: #8B4513;
+            color: #7A1C1C;
             font-weight: bold;
         }
 
@@ -150,78 +78,72 @@
             margin-top: 0.5rem;
         }
 
-        footer {
-            background-color: #333;
-            color: white;
-            text-align: center;
-            padding: 2rem;
-            margin-top: 3rem;
+        .section-title {
+            color: #5C1A1A;
+            margin-bottom: 2rem;
+            font-size: 1.3rem;
+            font-weight: 600;
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <h1>🏛️ EtnoMK</h1>
-            <nav>
-                <ul>
-                    <li><a href="/">Home</a></li>
-                    <li><a href="/records/view">Browse Records</a></li>
-                    <li><a href="/records/create">Add Record</a></li>
-                    <li><a href="/admin/dashboard">Admin</a></li>
-                    <li><a href="/contact">Contact</a></li>
-                </ul>
-            </nav>
+<main th:fragment="content">
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> / Admin Dashboard
+    </div>
+
+    <h2>🔧 Admin Dashboard</h2>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-number" th:text="${totalRecords}">0</div>
+            <div class="stat-label">Total Records</div>
         </div>
-    </header>
-
-    <div class="container">
-        <div class="breadcrumb">
-            <a href="/">Home</a> / Admin Dashboard
+        <div class="stat-card">
+            <div class="stat-number" th:text="${totalRegions}">0</div>
+            <div class="stat-label">Regions</div>
         </div>
-
-        <h2>🔧 Admin Dashboard</h2>
-
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number" th:text="${totalRecords}">0</div>
-                <div class="stat-label">Total Records</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" th:text="${totalRegions}">0</div>
-                <div class="stat-label">Regions</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" th:text="${totalCategories}">0</div>
-                <div class="stat-label">Categories</div>
-            </div>
-        </div>
-
-        <h3 style="color: #8B4513; margin-bottom: 2rem;">Management Options</h3>
-
-        <div class="admin-menu">
-            <div class="menu-card">
-                <h3>📋 Records</h3>
-                <p>Manage, edit, and delete all records in the system</p>
-                <a href="/admin/records">Manage Records</a>
-            </div>
-
-            <div class="menu-card">
-                <h3>🗺️ Regions</h3>
-                <p>Add, edit, and delete regions for categorization</p>
-                <a href="/admin/regions">Manage Regions</a>
-            </div>
-
-            <div class="menu-card">
-                <h3>📂 Categories</h3>
-                <p>Manage categories for traditional items</p>
-                <a href="/admin/categories">Manage Categories</a>
-            </div>
+        <div class="stat-card">
+            <div class="stat-number" th:text="${totalCategories}">0</div>
+            <div class="stat-label">Categories</div>
         </div>
     </div>
 
-    <footer>
-        <p>&copy; 2026 EtnoMK - Macedonian Cultural Heritage. All rights reserved.</p>
-    </footer>
+    <p class="section-title">Management Options</p>
+
+    <div class="admin-menu">
+        <div class="menu-card">
+            <h3>📋 Records</h3>
+            <p>Manage, edit, and delete all records in the system</p>
+            <a href="/admin/records">Manage Records</a>
+        </div>
+
+        <div class="menu-card">
+            <h3>🗺️ Regions</h3>
+            <p>Add, edit, and delete regions for categorization</p>
+            <a href="/admin/regions">Manage Regions</a>
+        </div>
+
+        <div class="menu-card">
+            <h3>📂 Categories</h3>
+            <p>Manage categories for traditional items</p>
+            <a href="/admin/categories">Manage Categories</a>
+        </div>
+
+        <div class="menu-card">
+            <h3>🧵 Materials</h3>
+            <p>Manage materials used in traditional items</p>
+            <a href="/admin/materials">Manage Materials</a>
+        </div>
+
+        <div class="menu-card">
+            <h3>🪡 Techniques</h3>
+            <p>Manage crafting techniques for traditional items</p>
+            <a href="/admin/techniques">Manage Techniques</a>
+        </div>
+    </div>
+
+</main>
 </body>
 </html>

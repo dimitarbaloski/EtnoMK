@@ -23,14 +23,22 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/", "/contact", "/records/**", "/css/**", "/js/**", "/images/**").permitAll()
-                .requestMatchers("/register", "/login", "/admin/login", "/admin/register", "/access-denied").permitAll()
+                // Public resources (NO "/")
+                .requestMatchers("/contact", "/records/**", "/css/**", "/js/**", "/images/**").permitAll()
+
+                // Auth pages
+                .requestMatchers("/login", "/register", "/admin/login", "/admin/register", "/access-denied").permitAll()
+
+                // Admin routes
                 .requestMatchers("/admin/dashboard").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/admin/**").hasAuthority("ROLE_ADMIN")
+
+                // EVERYTHING ELSE requires login (including "/")
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
@@ -45,8 +53,14 @@ public class SecurityConfig {
                 .logoutSuccessUrl("/login?logout=true")
                 .permitAll()
             )
-            .csrf(csrf -> csrf.disable()) // For simplicity, you might want to enable this in production
-            .exceptionHandling(exception -> exception.accessDeniedPage("/access-denied"));
+            .exceptionHandling(exception -> exception
+                // Force redirect to login if not authenticated
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.sendRedirect("/login");
+                })
+                .accessDeniedPage("/access-denied")
+            )
+            .csrf(csrf -> csrf.disable()); // enable in production if needed
 
         return http.build();
     }
