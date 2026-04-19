@@ -2,11 +2,21 @@ package mk.ukim.finki.etnomk.web;
 
 import mk.ukim.finki.etnomk.model.User;
 import mk.ukim.finki.etnomk.model.Role;
+import mk.ukim.finki.etnomk.security.JwtConstants;
+import mk.ukim.finki.etnomk.security.JwtHelper;
+import mk.ukim.finki.etnomk.security.JwtLoginRequest;
+import mk.ukim.finki.etnomk.security.JwtLoginResponse;
 import mk.ukim.finki.etnomk.service.UserService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -14,9 +24,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class AuthController {
 
     private final UserService userService;
+    private final AuthenticationManager authenticationManager;
+    private final JwtHelper jwtHelper;
 
-    public AuthController(UserService userService) {
+    public AuthController(UserService userService, AuthenticationManager authenticationManager, JwtHelper jwtHelper) {
         this.userService = userService;
+        this.authenticationManager = authenticationManager;
+        this.jwtHelper = jwtHelper;
     }
 
     @GetMapping("/login")
@@ -34,6 +48,15 @@ public class AuthController {
 
     // No manual POST /login; Spring Security formLogin handles it on /perform_login
 
+    @PostMapping("/api/auth/login")
+    public ResponseEntity<JwtLoginResponse> jwtLogin(@RequestBody JwtLoginRequest request) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+        );
+
+        String token = jwtHelper.generateToken((UserDetails) authentication.getPrincipal());
+        return ResponseEntity.ok(new JwtLoginResponse(token, "Bearer", JwtConstants.EXPIRATION_TIME));
+    }
 
     @GetMapping("/register")
     public String register() {
