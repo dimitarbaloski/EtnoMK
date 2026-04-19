@@ -5,9 +5,11 @@ import mk.ukim.finki.etnomk.model.User;
 import mk.ukim.finki.etnomk.repository.UserRepository;
 import mk.ukim.finki.etnomk.service.UserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+@Service
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -31,7 +33,10 @@ public class UserServiceImpl implements UserService {
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
 
-        user.setRole(Role.ROLE_USER);
+        // Only set default role if not already set
+        if (user.getRole() == null) {
+            user.setRole(Role.ROLE_USER);
+        }
 
         return userRepository.save(user);
     }

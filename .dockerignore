@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gitattributes
+target
+uploads
+.env
+.env.*
+!.env.example
+src/.env*
+.idea
+.vscode
+*.log
+*.tmp
+*.swp

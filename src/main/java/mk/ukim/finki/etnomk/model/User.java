@@ -21,4 +21,23 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Role role;
 
+    public Long getUserId() {
+        return userId;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public Role getRole() {
+        return role;
+    }
 }

@@ -3,20 +3,17 @@ package mk.ukim.finki.etnomk.service.impl;
 import mk.ukim.finki.etnomk.model.Image;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.repository.ImageRepository;
-import mk.ukim.finki.etnomk.repository.RecordRepository;
 import mk.ukim.finki.etnomk.service.ImageService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
 
 @Service
 public class ImageServiceImpl implements ImageService {
@@ -26,12 +23,9 @@ public class ImageServiceImpl implements ImageService {
     private static final String UPLOAD_DIR = "uploads/";
 
     private final ImageRepository imageRepository;
-    private final RecordRepository recordRepository;
 
-    public ImageServiceImpl(ImageRepository imageRepository,
-                            RecordRepository recordRepository) {
+    public ImageServiceImpl(ImageRepository imageRepository) {
         this.imageRepository = imageRepository;
-        this.recordRepository = recordRepository;
     }
 
     @Override
@@ -58,10 +52,7 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Override
-    public Image uploadImage(MultipartFile file, Long recordId) throws IOException {
-
-        Record record = recordRepository.findById(recordId)
-                .orElseThrow(() -> new RuntimeException("Record not found"));
+    public Image uploadImage(MultipartFile file, Record record) throws IOException {
 
         BufferedImage originalImage = ImageIO.read(file.getInputStream());
 

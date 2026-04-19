@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:replace="~{layout :: layout(~{::main}, 'Create Technique - EtnoMK')}">
+<head>
+    <style>
+        .container {
+            max-width: 600px;
+        }
+
+        .form-container {
+            background: white;
+            padding: 2rem;
+            border: 1px solid #e8d8b8;
+            border-radius: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+<main th:fragment="content">
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> / <a href="/admin/dashboard">Admin</a> / <a href="/admin/techniques">Manage Techniques</a> / Create
+    </div>
+
+    <h2>Create New Technique</h2>
+
+    <div class="form-container">
+        <form method="POST" action="/admin/techniques/create">
+            <div class="form-group">
+                <label for="name">Technique Name</label>
+                <input type="text" id="name" name="name" required placeholder="e.g., Weaving, Embroidery, Carving, Knitting">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create Technique</button>
+                <a href="/admin/techniques" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+</main>
+</body>
+</html>
