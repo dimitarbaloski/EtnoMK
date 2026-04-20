@@ -1,17 +1,21 @@
 package mk.ukim.finki.etnomk.web;
 
-import mk.ukim.finki.etnomk.model.Category;
-import mk.ukim.finki.etnomk.model.Material;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.model.Region;
+import mk.ukim.finki.etnomk.model.Category;
+import mk.ukim.finki.etnomk.model.Material;
 import mk.ukim.finki.etnomk.model.Technique;
 import mk.ukim.finki.etnomk.service.*;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-@Controller
-@RequestMapping("/admin")
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ROLE_ADMIN')")
 public class AdminController {
 
     private final RecordService recordService;
@@ -21,8 +25,8 @@ public class AdminController {
     private final TechniqueService techniqueService;
 
     public AdminController(RecordService recordService, RegionService regionService,
-                          CategoryService categoryService, MaterialService materialService,
-                          TechniqueService techniqueService) {
+                           CategoryService categoryService, MaterialService materialService,
+                           TechniqueService techniqueService) {
         this.recordService = recordService;
         this.regionService = regionService;
         this.categoryService = categoryService;
@@ -30,154 +34,139 @@ public class AdminController {
         this.techniqueService = techniqueService;
     }
 
-    // Dashboard
+    // ── Dashboard ──────────────────────────────────────
+
     @GetMapping("/dashboard")
-    public String dashboard(Model model) {
-        model.addAttribute("totalRecords", recordService.findAll().size());
-        model.addAttribute("totalRegions", regionService.findAll().size());
-        model.addAttribute("totalCategories", categoryService.findAll().size());
-        return "admin/dashboard";
+    public ResponseEntity<Map<String, Long>> dashboard() {
+        return ResponseEntity.ok(Map.of(
+                "totalRecords", (long) recordService.findAll().size(),
+                "totalRegions", (long) regionService.findAll().size(),
+                "totalCategories", (long) categoryService.findAll().size()
+        ));
     }
 
-    // Record Management
+    // ── Records ────────────────────────────────────────
+
     @GetMapping("/records")
-    public String manageRecords(Model model) {
-        model.addAttribute("records", recordService.findAll());
-        return "admin/manage-records";
+    public ResponseEntity<List<Record>> getRecords() {
+        return ResponseEntity.ok(recordService.findAll());
     }
 
-    @GetMapping("/records/edit/{id}")
-    public String editRecordForm(@PathVariable Long id, Model model) {
-        recordService.findById(id).ifPresent(record -> {
-            model.addAttribute("record", record);
-            model.addAttribute("regions", regionService.findAll());
-            model.addAttribute("categories", categoryService.findAll());
-            model.addAttribute("materials", materialService.findAll());
-            model.addAttribute("techniques", techniqueService.findAll());
-        });
-        return "admin/edit-record";
+    @PutMapping("/records/edit/{id}")
+    public ResponseEntity<?> editRecord(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return recordService.findById(id).map(existing -> {
+            if (body.containsKey("title")) existing.setTitle((String) body.get("title"));
+            if (body.containsKey("description")) existing.setDescription((String) body.get("description"));
+
+            if (body.containsKey("regionId")) {
+                Long regionId = Long.valueOf(body.get("regionId").toString());
+                existing.setRegion(regionService.findById(regionId).orElse(null));
+            }
+            if (body.containsKey("categoryId")) {
+                Long categoryId = Long.valueOf(body.get("categoryId").toString());
+                existing.setCategory(categoryService.findById(categoryId).orElse(null));
+            }
+            if (body.containsKey("materialId")) {
+                Long materialId = Long.valueOf(body.get("materialId").toString());
+                existing.setMaterial(materialService.findById(materialId).orElse(null));
+            }
+            if (body.containsKey("techniqueId")) {
+                Long techniqueId = Long.valueOf(body.get("techniqueId").toString());
+                existing.setTechnique(techniqueService.findById(techniqueId).orElse(null));
+            }
+
+            recordService.updateRecord(id, existing);
+            return ResponseEntity.ok(existing);
+        }).orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping("/records/edit/{id}")
-    public String editRecord(@PathVariable Long id, @ModelAttribute Record record,
-                            @RequestParam(name = "regionId") Long regionId,
-                            @RequestParam(name = "categoryId") Long categoryId,
-                            @RequestParam(name = "materialId", required = false) Long materialId,
-                            @RequestParam(name = "techniqueId", required = false) Long techniqueId) {
-
-        record.setRegion(regionService.findById(regionId).orElse(null));
-        record.setCategory(categoryService.findById(categoryId).orElse(null));
-
-        if (materialId != null) {
-            record.setMaterial(materialService.findById(materialId).orElse(null));
-        }
-        if (techniqueId != null) {
-            record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
-        }
-
-        recordService.updateRecord(id, record);
-        return "redirect:/admin/records";
-    }
-
-    @PostMapping("/records/delete/{id}")
-    public String deleteRecord(@PathVariable Long id) {
+    @DeleteMapping("/records/delete/{id}")
+    public ResponseEntity<?> deleteRecord(@PathVariable Long id) {
         recordService.deleteRecord(id);
-        return "redirect:/admin/records";
+        return ResponseEntity.ok(Map.of("message", "Record deleted"));
     }
 
-    // Region Management
+    // ── Regions ────────────────────────────────────────
+
     @GetMapping("/regions")
-    public String manageRegions(Model model) {
-        model.addAttribute("regions", regionService.findAll());
-        return "admin/manage-regions";
-    }
-
-    @GetMapping("/regions/create")
-    public String createRegionForm() {
-        return "admin/create-region";
+    public ResponseEntity<List<Region>> getRegions() {
+        return ResponseEntity.ok(regionService.findAll());
     }
 
     @PostMapping("/regions/create")
-    public String createRegion(@ModelAttribute Region region) {
+    public ResponseEntity<?> createRegion(@RequestBody Map<String, String> body) {
+        Region region = new Region();
+        region.setName(body.get("name"));
         regionService.createRegion(region);
-        return "redirect:/admin/regions";
+        return ResponseEntity.ok(region);
     }
 
-    @PostMapping("/regions/delete/{id}")
-    public String deleteRegion(@PathVariable Long id) {
+    @DeleteMapping("/regions/delete/{id}")
+    public ResponseEntity<?> deleteRegion(@PathVariable Long id) {
         regionService.deleteRegion(id);
-        return "redirect:/admin/regions";
+        return ResponseEntity.ok(Map.of("message", "Region deleted"));
     }
 
-    // Category Management
+    // ── Categories ─────────────────────────────────────
+
     @GetMapping("/categories")
-    public String manageCategories(Model model) {
-        model.addAttribute("categories", categoryService.findAll());
-        return "admin/manage-categories";
-    }
-
-    @GetMapping("/categories/create")
-    public String createCategoryForm() {
-        return "admin/create-category";
+    public ResponseEntity<List<Category>> getCategories() {
+        return ResponseEntity.ok(categoryService.findAll());
     }
 
     @PostMapping("/categories/create")
-    public String createCategory(@ModelAttribute Category category) {
+    public ResponseEntity<?> createCategory(@RequestBody Map<String, String> body) {
+        Category category = new Category();
+        category.setName(body.get("name"));
         categoryService.createCategory(category);
-        return "redirect:/admin/categories";
+        return ResponseEntity.ok(category);
     }
 
-    @PostMapping("/categories/delete/{id}")
-    public String deleteCategory(@PathVariable Long id) {
+    @DeleteMapping("/categories/delete/{id}")
+    public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
         categoryService.deleteCategory(id);
-        return "redirect:/admin/categories";
+        return ResponseEntity.ok(Map.of("message", "Category deleted"));
     }
 
-    // Material Management
+    // ── Materials ──────────────────────────────────────
+
     @GetMapping("/materials")
-    public String manageMaterials(Model model) {
-        model.addAttribute("materials", materialService.findAll());
-        return "admin/manage-materials";
-    }
-
-    @GetMapping("/materials/create")
-    public String createMaterialForm() {
-        return "admin/create-material";
+    public ResponseEntity<List<Material>> getMaterials() {
+        return ResponseEntity.ok(materialService.findAll());
     }
 
     @PostMapping("/materials/create")
-    public String createMaterial(@ModelAttribute Material material) {
+    public ResponseEntity<?> createMaterial(@RequestBody Map<String, String> body) {
+        Material material = new Material();
+        material.setName(body.get("name"));
         materialService.createMaterial(material);
-        return "redirect:/admin/materials";
+        return ResponseEntity.ok(material);
     }
 
-    @PostMapping("/materials/delete/{id}")
-    public String deleteMaterial(@PathVariable Long id) {
+    @DeleteMapping("/materials/delete/{id}")
+    public ResponseEntity<?> deleteMaterial(@PathVariable Long id) {
         materialService.deleteMaterial(id);
-        return "redirect:/admin/materials";
+        return ResponseEntity.ok(Map.of("message", "Material deleted"));
     }
 
-    // Technique Management
+    // ── Techniques ─────────────────────────────────────
+
     @GetMapping("/techniques")
-    public String manageTechniques(Model model) {
-        model.addAttribute("techniques", techniqueService.findAll());
-        return "admin/manage-techniques";
-    }
-
-    @GetMapping("/techniques/create")
-    public String createTechniqueForm() {
-        return "admin/create-technique";
+    public ResponseEntity<List<Technique>> getTechniques() {
+        return ResponseEntity.ok(techniqueService.findAll());
     }
 
     @PostMapping("/techniques/create")
-    public String createTechnique(@ModelAttribute Technique technique) {
+    public ResponseEntity<?> createTechnique(@RequestBody Map<String, String> body) {
+        Technique technique = new Technique();
+        technique.setName(body.get("name"));
         techniqueService.createTechnique(technique);
-        return "redirect:/admin/techniques";
+        return ResponseEntity.ok(technique);
     }
 
-    @PostMapping("/techniques/delete/{id}")
-    public String deleteTechnique(@PathVariable Long id) {
+    @DeleteMapping("/techniques/delete/{id}")
+    public ResponseEntity<?> deleteTechnique(@PathVariable Long id) {
         techniqueService.deleteTechnique(id);
-        return "redirect:/admin/techniques";
+        return ResponseEntity.ok(Map.of("message", "Technique deleted"));
     }
 }

@@ -16,6 +16,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -43,10 +48,11 @@ public class JwtSecurityConfig {
     public SecurityFilterChain apiFilterChain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
         http
             .securityMatcher("/api/**")
+            .cors(cors -> {})
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exception -> exception
@@ -67,17 +73,10 @@ public class JwtSecurityConfig {
     public SecurityFilterChain webFilterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                // Public resources (NO "/")
                 .requestMatchers("/contact", "/records/**", "/css/**", "/js/**", "/images/**").permitAll()
-
-                // Auth pages
                 .requestMatchers("/login", "/register", "/admin/login", "/access-denied").permitAll()
-
-                // Admin routes
                 .requestMatchers("/admin/dashboard").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/admin/**").hasAuthority("ROLE_ADMIN")
-
-                // EVERYTHING ELSE requires login (including "/")
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
@@ -86,7 +85,7 @@ public class JwtSecurityConfig {
                 .successHandler((request, response, authentication) -> {
                     boolean isAdmin = authentication.getAuthorities()
                             .stream()
-                            .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+                            .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
                     response.sendRedirect(isAdmin ? "/admin/dashboard" : "/");
                 })
                 .failureUrl("/login?error=true")
@@ -98,24 +97,24 @@ public class JwtSecurityConfig {
                 .permitAll()
             )
             .exceptionHandling(exception -> exception
-                // Force redirect to login if not authenticated
-                .authenticationEntryPoint((request, response, authException) -> {
-                    if (request.getRequestURI().startsWith("/api/")) {
-                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-                    } else {
-                        response.sendRedirect("/login");
-                    }
-                })
-                .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    if (request.getRequestURI().startsWith("/api/")) {
-                        response.sendError(HttpServletResponse.SC_FORBIDDEN);
-                    } else {
-                        response.sendRedirect("/access-denied");
-                    }
-                })
+                .authenticationEntryPoint((req, res, ex) -> res.sendRedirect("/login"))
+                .accessDeniedHandler((req, res, ex) -> res.sendRedirect("/access-denied"))
             )
-            .csrf(csrf -> csrf.disable()); // enable in production if needed
+            .csrf(csrf -> csrf.disable());
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

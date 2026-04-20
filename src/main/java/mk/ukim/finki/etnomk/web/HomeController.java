@@ -1,13 +1,17 @@
 package mk.ukim.finki.etnomk.web;
 
+import mk.ukim.finki.etnomk.service.CategoryService;
 import mk.ukim.finki.etnomk.service.RecordService;
 import mk.ukim.finki.etnomk.service.RegionService;
-import mk.ukim.finki.etnomk.service.CategoryService;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-@Controller
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
 public class HomeController {
 
     private final RecordService recordService;
@@ -20,22 +24,12 @@ public class HomeController {
         this.categoryService = categoryService;
     }
 
-    @GetMapping("/")
-    public String home(Model model) {
-        model.addAttribute("records", recordService.findAll());
-        model.addAttribute("regions", regionService.findAll());
-        model.addAttribute("categories", categoryService.findAll());
-        return "home";
+    @GetMapping("/home")
+    public ResponseEntity<?> home() {
+        return ResponseEntity.ok(Map.of(
+                "records", recordService.findAll(),
+                "regions", regionService.findAll(),
+                "categories", categoryService.findAll()
+        ));
     }
-
-    @GetMapping("/dashboard")
-    public String dashboardRedirect() {
-        return "redirect:/admin/dashboard";
-    }
-
-    @GetMapping("/contact")
-    public String contact() {
-        return "contact";
-    }
-
 }
