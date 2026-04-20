@@ -3,6 +3,7 @@
 .gitattributes
 target
 uploads
+frontend
 .env
 .env.*
 !.env.example

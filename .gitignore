@@ -35,4 +35,12 @@ build/
 ### Environment files ###
 .env
 .env.*
+!.env.example
 src/.env*
+
+### Runtime uploads ###
+uploads/
+
+### Frontend build output ###
+frontend/node_modules/
+frontend/dist/

@@ -39,6 +39,19 @@ services:
     networks:
       - etnomk-network
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: etnomk-frontend:local
+    container_name: etnomk-frontend
+    depends_on:
+      - app
+    ports:
+      - "5173:80"
+    networks:
+      - etnomk-network
+
 volumes:
   etnomk-postgres-data:
 
