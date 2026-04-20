@@ -4,11 +4,24 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.6;
   color: #333;
   background-color: #FAF0DC;
+  min-height: 100vh;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 22px);
 }
 
 /* Decorative pattern strip */
@@ -93,6 +106,8 @@ nav a:hover {
   max-width: 1200px;
   margin: 2rem auto;
   padding: 0 20px;
+  width: 100%;
+  flex: 1;
 }
 
 /* Card */
@@ -370,7 +385,7 @@ footer {
   color: #e8d8b8;
   text-align: center;
   padding: 2rem;
-  margin-top: 3rem;
+  margin-top: auto;
 }
 
 /* Alerts */
