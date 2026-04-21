@@ -15,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasRole('ROLE_ADMIN')")
 public class AdminController {
 
     private final RecordService recordService;
@@ -37,6 +36,7 @@ public class AdminController {
     // ── Dashboard ──────────────────────────────────────
 
     @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<Map<String, Long>> dashboard() {
         return ResponseEntity.ok(Map.of(
                 "totalRecords", (long) recordService.findAll().size(),
@@ -48,11 +48,13 @@ public class AdminController {
     // ── Records ────────────────────────────────────────
 
     @GetMapping("/records")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<List<Record>> getRecords() {
         return ResponseEntity.ok(recordService.findAll());
     }
 
     @PutMapping("/records/edit/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> editRecord(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         return recordService.findById(id).map(existing -> {
             if (body.containsKey("title")) existing.setTitle((String) body.get("title"));
@@ -81,6 +83,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/records/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> deleteRecord(@PathVariable Long id) {
         recordService.deleteRecord(id);
         return ResponseEntity.ok(Map.of("message", "Record deleted"));
@@ -94,6 +97,7 @@ public class AdminController {
     }
 
     @PostMapping("/regions/create")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> createRegion(@RequestBody Map<String, String> body) {
         Region region = new Region();
         region.setName(body.get("name"));
@@ -102,6 +106,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/regions/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> deleteRegion(@PathVariable Long id) {
         regionService.deleteRegion(id);
         return ResponseEntity.ok(Map.of("message", "Region deleted"));
@@ -115,6 +120,7 @@ public class AdminController {
     }
 
     @PostMapping("/categories/create")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> createCategory(@RequestBody Map<String, String> body) {
         Category category = new Category();
         category.setName(body.get("name"));
@@ -123,6 +129,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/categories/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(Map.of("message", "Category deleted"));
@@ -136,6 +143,7 @@ public class AdminController {
     }
 
     @PostMapping("/materials/create")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> createMaterial(@RequestBody Map<String, String> body) {
         Material material = new Material();
         material.setName(body.get("name"));
@@ -144,6 +152,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/materials/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> deleteMaterial(@PathVariable Long id) {
         materialService.deleteMaterial(id);
         return ResponseEntity.ok(Map.of("message", "Material deleted"));
@@ -157,6 +166,7 @@ public class AdminController {
     }
 
     @PostMapping("/techniques/create")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> createTechnique(@RequestBody Map<String, String> body) {
         Technique technique = new Technique();
         technique.setName(body.get("name"));
@@ -165,6 +175,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/techniques/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> deleteTechnique(@PathVariable Long id) {
         techniqueService.deleteTechnique(id);
         return ResponseEntity.ok(Map.of("message", "Technique deleted"));

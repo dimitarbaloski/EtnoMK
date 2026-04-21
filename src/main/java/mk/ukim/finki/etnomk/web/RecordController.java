@@ -102,7 +102,7 @@ public class RecordController {
                 imageService.uploadImage(image, saved);
             }
 
-            return ResponseEntity.ok(saved);
+            return ResponseEntity.ok(recordService.findById(saved.getRecordId()).orElse(saved));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

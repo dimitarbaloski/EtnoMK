@@ -52,7 +52,17 @@ public class JwtSecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
+                // Auth endpoints - public
                 .requestMatchers("/api/auth/**").permitAll()
+                // Records - public GET
+                .requestMatchers(HttpMethod.GET, "/api/records").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/records/**").permitAll()
+                // Regions, Categories, Materials, Techniques - public GET
+                .requestMatchers(HttpMethod.GET, "/api/admin/regions").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/categories").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/materials").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/admin/techniques").permitAll()
+                // Everything else requires authentication
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exception -> exception

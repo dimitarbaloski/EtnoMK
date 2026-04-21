@@ -104,7 +104,7 @@ export const categoriesApi = {
 // ── Materials ─────────────────────────────────────────
 export const materialsApi = {
   getAll: () =>
-    fetch(`${BASE_URL}/admin/materials`).then((r) => r.json()),
+    fetch(`${BASE_URL}/admin/materials`, { headers: authHeaders() }).then((r) => r.json()),
 
   create: (name) =>
     fetch(`${BASE_URL}/admin/materials/create`, {
@@ -123,7 +123,7 @@ export const materialsApi = {
 // ── Techniques ────────────────────────────────────────
 export const techniquesApi = {
   getAll: () =>
-    fetch(`${BASE_URL}/admin/techniques`).then((r) => r.json()),
+    fetch(`${BASE_URL}/admin/techniques`, { headers: authHeaders() }).then((r) => r.json()),
 
   create: (name) =>
     fetch(`${BASE_URL}/admin/techniques/create`, {

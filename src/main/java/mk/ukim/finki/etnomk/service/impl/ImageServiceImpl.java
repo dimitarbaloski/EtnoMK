@@ -20,7 +20,7 @@ public class ImageServiceImpl implements ImageService {
 
     private static final int WIDTH = 800;
     private static final int HEIGHT = 800;
-    private static final String UPLOAD_DIR = "uploads/";
+    private static final String UPLOAD_DIR = System.getProperty("user.home") + "/etnomk-uploads/";
 
     private final ImageRepository imageRepository;
 
