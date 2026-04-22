@@ -83,7 +83,7 @@ public class JwtSecurityConfig {
     public SecurityFilterChain webFilterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/contact", "/records/**", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/contact", "/records/**", "/css/**", "/js/**", "/images/**", "/uploads/**").permitAll()
                 .requestMatchers("/login", "/register", "/admin/login", "/access-denied").permitAll()
                 .requestMatchers("/admin/dashboard").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/admin/**").hasAuthority("ROLE_ADMIN")

@@ -2,7 +2,7 @@ package mk.ukim.finki.etnomk.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -38,8 +38,8 @@ public class Record {
     @JoinColumn(name = "technique_id")
     private Technique technique;
 
-    @OneToMany(mappedBy = "record", cascade = CascadeType.ALL)
-    @JsonBackReference
+    @OneToMany(mappedBy = "record", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @JsonManagedReference
     private List<Image> images;
 
 }
