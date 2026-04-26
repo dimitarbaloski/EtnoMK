@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     container_name: etnomk-db
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -10,6 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - etnomk-postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       etnomk-network:
         aliases:
@@ -20,6 +21,23 @@ services:
       timeout: 5s
       retries: 5
 
+  similarity:
+    build:
+      context: ./similarity-service
+      dockerfile: Dockerfile
+    image: etnomk-similarity:local
+    container_name: etnomk-similarity
+    ports:
+      - "5001:5000"
+    networks:
+      - etnomk-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
   app:
     build:
       context: .
@@ -28,6 +46,8 @@ services:
     container_name: etnomk-app
     depends_on:
       db:
+        condition: service_healthy
+      similarity:
         condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}

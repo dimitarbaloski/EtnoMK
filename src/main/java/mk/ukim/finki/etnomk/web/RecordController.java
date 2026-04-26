@@ -107,4 +107,41 @@ public class RecordController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    /**
+     * GET /api/records/{id}/similar
+     * Returns up to 5 records visually similar to the record's primary image.
+     */
+    @GetMapping("/{id}/similar")
+    public ResponseEntity<?> getSimilar(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "5") int limit) {
+        return recordService.findById(id)
+                .<ResponseEntity<?>>map(record ->
+                        ResponseEntity.ok(imageService.findSimilarRecords(id, limit))
+                )
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * POST /api/records/similar-by-image
+     * Accepts a multipart image upload and returns records visually similar to it.
+     * No authentication required — anyone can do a pattern search.
+     */
+    @PostMapping("/similar-by-image")
+    public ResponseEntity<?> getSimilarByImage(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(defaultValue = "5") int limit) {
+
+        if (image == null || image.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No image provided"));
+        }
+        try {
+            List<Record> similar = imageService.findSimilarByUpload(image, limit);
+            return ResponseEntity.ok(similar);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Similarity search failed: " + e.getMessage()));
+        }
+    }
 }

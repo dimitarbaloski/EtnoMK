@@ -36,6 +36,24 @@ export const recordsApi = {
   getById: (id) =>
     fetch(`${BASE_URL}/records/${id}`).then((r) => r.json()),
 
+  /** Find records similar to the image already stored for this record. */
+  getSimilar: (id, limit = 5) =>
+    fetch(`${BASE_URL}/records/${id}/similar?limit=${limit}`).then((r) => r.json()),
+
+  /**
+   * Upload an arbitrary image file and get back visually similar records.
+   * @param {File} file  - the image file to compare against
+   * @param {number} limit - max results
+   */
+  getSimilarByImage: (file, limit = 5) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return fetch(`${BASE_URL}/records/similar-by-image?limit=${limit}`, {
+      method: "POST",
+      body: formData,
+    }).then((r) => r.json());
+  },
+
   search: (keyword) =>
     fetch(`${BASE_URL}/records/search?keyword=${encodeURIComponent(keyword)}`).then((r) => r.json()),
 
@@ -46,7 +64,7 @@ export const recordsApi = {
     fetch(`${BASE_URL}/records/create`, {
       method: "POST",
       headers: { Authorization: `Bearer ${getToken()}` },
-      body: formData, // FormData for file upload
+      body: formData,
     }).then((r) => r.json()),
 
   update: (id, data) =>
