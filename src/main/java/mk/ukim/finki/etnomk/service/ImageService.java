@@ -21,4 +21,16 @@ public interface ImageService {
      * Used by the "upload a pattern" flow.
      */
     List<Record> findSimilarByUpload(MultipartFile file, int limit) throws IOException, InterruptedException;
+
+    /**
+     * Generate embeddings for images that do not have one yet.
+     * Returns the number of images successfully backfilled.
+     */
+    int backfillMissingEmbeddings();
+
+    /**
+     * Regenerate embeddings for every stored image using the current algorithm.
+     * Returns the number of images successfully reindexed.
+     */
+    int reindexAllEmbeddings();
 }

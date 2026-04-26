@@ -139,6 +139,9 @@ public class RecordController {
         try {
             List<Record> similar = imageService.findSimilarByUpload(image, limit);
             return ResponseEntity.ok(similar);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Similarity search failed: " + e.getMessage()));

@@ -22,15 +22,17 @@ public class AdminController {
     private final CategoryService categoryService;
     private final MaterialService materialService;
     private final TechniqueService techniqueService;
+    private final ImageService imageService;
 
     public AdminController(RecordService recordService, RegionService regionService,
                            CategoryService categoryService, MaterialService materialService,
-                           TechniqueService techniqueService) {
+                           TechniqueService techniqueService, ImageService imageService) {
         this.recordService = recordService;
         this.regionService = regionService;
         this.categoryService = categoryService;
         this.materialService = materialService;
         this.techniqueService = techniqueService;
+        this.imageService = imageService;
     }
 
     // ── Dashboard ──────────────────────────────────────
@@ -179,5 +181,25 @@ public class AdminController {
     public ResponseEntity<?> deleteTechnique(@PathVariable Long id) {
         techniqueService.deleteTechnique(id);
         return ResponseEntity.ok(Map.of("message", "Technique deleted"));
+    }
+
+    @PostMapping("/images/backfill-embeddings")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<?> backfillEmbeddings() {
+        int updated = imageService.backfillMissingEmbeddings();
+        return ResponseEntity.ok(Map.of(
+                "message", "Embedding backfill completed",
+                "updated", updated
+        ));
+    }
+
+    @PostMapping("/images/reindex-embeddings")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<?> reindexEmbeddings() {
+        int updated = imageService.reindexAllEmbeddings();
+        return ResponseEntity.ok(Map.of(
+                "message", "Embedding reindex completed",
+                "updated", updated
+        ));
     }
 }

@@ -10,6 +10,7 @@ import java.util.List;
 public interface ImageRepository extends JpaRepository<Image, Long> {
 
     List<Image> findByRecord_RecordId(Long recordId);
+    List<Image> findByEmbeddingIsNull();
 
     /**
      * Cosine-distance nearest-neighbour search via pgvector (<=> operator).
@@ -21,11 +22,13 @@ public interface ImageRepository extends JpaRepository<Image, Long> {
             FROM   images i
             WHERE  i.embedding IS NOT NULL
               AND  i.record_id != :recordId
+              AND  i.embedding <=> CAST(:embedding AS vector) <= :maxDistance
             ORDER  BY i.embedding <=> CAST(:embedding AS vector)
             LIMIT  :limit
             """, nativeQuery = true)
     List<Image> findSimilar(
             @Param("recordId") Long recordId,
             @Param("embedding") String embedding,
+            @Param("maxDistance") double maxDistance,
             @Param("limit") int limit);
 }

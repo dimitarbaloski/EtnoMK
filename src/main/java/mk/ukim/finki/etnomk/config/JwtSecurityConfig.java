@@ -57,6 +57,7 @@ public class JwtSecurityConfig {
                 // Records - public GET
                 .requestMatchers(HttpMethod.GET, "/api/records").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/records/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/records/similar-by-image").permitAll()
                 // Regions, Categories, Materials, Techniques - public GET
                 .requestMatchers(HttpMethod.GET, "/api/admin/regions").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/categories").permitAll()

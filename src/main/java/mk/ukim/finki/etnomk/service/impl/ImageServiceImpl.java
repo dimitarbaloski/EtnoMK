@@ -4,10 +4,21 @@ import mk.ukim.finki.etnomk.model.Image;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.repository.ImageRepository;
 import mk.ukim.finki.etnomk.service.ImageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
@@ -15,23 +26,26 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 public class ImageServiceImpl implements ImageService {
+    private static final Logger log = LoggerFactory.getLogger(ImageServiceImpl.class);
 
     private static final int WIDTH = 800;
     private static final int HEIGHT = 800;
+    private static final int MIN_PATTERN_SEARCH_WIDTH = 128;
+    private static final int MIN_PATTERN_SEARCH_HEIGHT = 128;
     private static final String UPLOAD_DIR = "/app/uploads/";
     private static final String SIMILARITY_SERVICE_URL = "http://similarity:5000/embed";
+    private static final double MAX_SIMILARITY_DISTANCE = 0.22;
 
     private final ImageRepository imageRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public ImageServiceImpl(ImageRepository imageRepository) {
         this.imageRepository = imageRepository;
@@ -75,10 +89,14 @@ public class ImageServiceImpl implements ImageService {
         image.setRecord(record);
 
         try {
-            float[] embedding = getEmbedding(file);
+            float[] embedding = requestEmbedding(
+                    Files.readAllBytes(outputFile.toPath()),
+                    filename,
+                    "image/jpeg"
+            );
             image.setEmbedding(embedding);
         } catch (Exception e) {
-            System.err.println("[EtnoMK] Could not get embedding (similarity service may be down): " + e.getMessage());
+            log.warn("Could not generate embedding for uploaded image {}: {}", filename, e.getMessage());
         }
 
         return imageRepository.save(image);
@@ -86,44 +104,9 @@ public class ImageServiceImpl implements ImageService {
 
     @Override
     public float[] getEmbedding(MultipartFile file) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-
-        String boundary = "----Boundary" + System.currentTimeMillis();
-        byte[] fileBytes = file.getBytes();
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "image.jpg";
-
-        String bodyStart = "--" + boundary + "\r\n" +
-                "Content-Disposition: form-data; name=\"image\"; filename=\"" + fileName + "\"\r\n" +
-                "Content-Type: image/jpeg\r\n\r\n";
-        String bodyEnd = "\r\n--" + boundary + "--\r\n";
-
-        byte[] start = bodyStart.getBytes();
-        byte[] end = bodyEnd.getBytes();
-        byte[] body = new byte[start.length + fileBytes.length + end.length];
-        System.arraycopy(start, 0, body, 0, start.length);
-        System.arraycopy(fileBytes, 0, body, start.length, fileBytes.length);
-        System.arraycopy(end, 0, body, start.length + fileBytes.length, end.length);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(SIMILARITY_SERVICE_URL))
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            throw new IOException("Similarity service returned HTTP " + response.statusCode() + ": " + response.body());
-        }
-
-        JsonNode json = objectMapper.readTree(response.body());
-        JsonNode embeddingNode = json.get("embedding");
-
-        float[] embedding = new float[embeddingNode.size()];
-        for (int i = 0; i < embeddingNode.size(); i++) {
-            embedding[i] = (float) embeddingNode.get(i).asDouble();
-        }
-        return embedding;
+        String contentType = file.getContentType() != null ? file.getContentType() : "image/jpeg";
+        return requestEmbedding(file.getBytes(), fileName, contentType);
     }
 
     /** Build the "[v1,v2,...]" string pgvector expects from a float array. */
@@ -140,13 +123,44 @@ public class ImageServiceImpl implements ImageService {
     @Override
     public List<Record> findSimilarRecords(Long recordId, int limit) {
         List<Image> images = imageRepository.findByRecord_RecordId(recordId);
-        if (images.isEmpty() || images.get(0).getEmbedding() == null) {
+        if (images.isEmpty()) {
             return List.of();
         }
 
-        String vectorStr = toVectorString(images.get(0).getEmbedding());
+        float[] embedding = null;
+        for (Image image : images) {
+            embedding = ensureEmbedding(image);
+            if (embedding != null) {
+                break;
+            }
+        }
 
-        return imageRepository.findSimilar(recordId, vectorStr, limit)
+        if (embedding == null) {
+            log.info("No usable embedding found for record {}", recordId);
+            return List.of();
+        }
+
+        String vectorStr = toVectorString(embedding);
+
+        List<Record> matches = imageRepository.findSimilar(recordId, vectorStr, MAX_SIMILARITY_DISTANCE, limit)
+                .stream()
+                .map(Image::getRecord)
+                .filter(r -> r != null)
+                .distinct()
+                .toList();
+
+        if (!matches.isEmpty()) {
+            return matches;
+        }
+
+        int backfilled = backfillMissingEmbeddings();
+        if (backfilled == 0) {
+            return List.of();
+        }
+
+        log.info("Backfilled {} missing embeddings while searching for records similar to record {}", backfilled, recordId);
+
+        return imageRepository.findSimilar(recordId, vectorStr, MAX_SIMILARITY_DISTANCE, limit)
                 .stream()
                 .map(Image::getRecord)
                 .filter(r -> r != null)
@@ -157,15 +171,152 @@ public class ImageServiceImpl implements ImageService {
     @Override
     public List<Record> findSimilarByUpload(MultipartFile file, int limit)
             throws IOException, InterruptedException {
+        validatePatternSearchImageSize(file);
         float[] embedding = getEmbedding(file);
         String vectorStr = toVectorString(embedding);
 
         // Use recordId = -1 so nothing is excluded (no real record has that ID)
-        return imageRepository.findSimilar(-1L, vectorStr, limit)
+        return imageRepository.findSimilar(-1L, vectorStr, MAX_SIMILARITY_DISTANCE, limit)
                 .stream()
                 .map(Image::getRecord)
                 .filter(r -> r != null)
                 .distinct()
                 .toList();
+    }
+
+    private void validatePatternSearchImageSize(MultipartFile file) throws IOException {
+        BufferedImage image = ImageIO.read(file.getInputStream());
+        if (image == null) {
+            throw new IllegalArgumentException("The uploaded file is not a valid image.");
+        }
+
+        if (image.getWidth() < MIN_PATTERN_SEARCH_WIDTH || image.getHeight() < MIN_PATTERN_SEARCH_HEIGHT) {
+            throw new IllegalArgumentException(
+                    "Pattern search images must be at least "
+                            + MIN_PATTERN_SEARCH_WIDTH + "x" + MIN_PATTERN_SEARCH_HEIGHT
+                            + " pixels. Uploaded image was "
+                            + image.getWidth() + "x" + image.getHeight() + "."
+            );
+        }
+    }
+
+    @Override
+    public int backfillMissingEmbeddings() {
+        int updated = 0;
+
+        for (Image image : imageRepository.findByEmbeddingIsNull()) {
+            if (refreshStoredImageEmbedding(image)) {
+                updated++;
+            }
+        }
+
+        return updated;
+    }
+
+    @Override
+    public int reindexAllEmbeddings() {
+        int updated = 0;
+
+        for (Image image : imageRepository.findAll()) {
+            if (refreshStoredImageEmbedding(image)) {
+                updated++;
+            }
+        }
+
+        return updated;
+    }
+
+    private Path resolveStoredImagePath(String imagePath) {
+        String normalized = imagePath.startsWith("/uploads/")
+                ? imagePath.substring("/uploads/".length())
+                : imagePath;
+        return Path.of(UPLOAD_DIR, normalized);
+    }
+
+    private float[] ensureEmbedding(Image image) {
+        if (image.getEmbedding() != null) {
+            return image.getEmbedding();
+        }
+
+        if (refreshStoredImageEmbedding(image)) {
+            return image.getEmbedding();
+        }
+
+        return null;
+    }
+
+    private boolean refreshStoredImageEmbedding(Image image) {
+        if (image.getImagePath() == null || image.getImagePath().isBlank()) {
+            return false;
+        }
+
+        try {
+            Path path = resolveStoredImagePath(image.getImagePath());
+            if (!Files.exists(path)) {
+                log.warn("Cannot generate embedding because image file is missing: {}", path);
+                return false;
+            }
+
+            String contentType = Files.probeContentType(path);
+            if (contentType == null) {
+                contentType = "image/jpeg";
+            }
+
+            float[] embedding = requestEmbedding(
+                    Files.readAllBytes(path),
+                    path.getFileName().toString(),
+                    contentType
+            );
+            image.setEmbedding(embedding);
+            imageRepository.save(image);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to generate missing embedding for image {}: {}", image.getImageId(), e.getMessage());
+            return false;
+        }
+    }
+
+    private float[] requestEmbedding(byte[] fileBytes, String fileName, String contentType)
+            throws IOException, InterruptedException {
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        ByteArrayResource resource = new ByteArrayResource(fileBytes) {
+            @Override
+            public String getFilename() {
+                return fileName;
+            }
+        };
+        HttpHeaders partHeaders = new HttpHeaders();
+        partHeaders.setContentType(MediaType.parseMediaType(contentType));
+        parts.add("image", new HttpEntity<>(resource, partHeaders));
+
+        HttpHeaders requestHeaders = new HttpHeaders();
+        requestHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        HttpEntity<MultiValueMap<String, Object>> requestEntity =
+                new HttpEntity<>(parts, requestHeaders);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                SIMILARITY_SERVICE_URL,
+                HttpMethod.POST,
+                requestEntity,
+                String.class
+        );
+
+        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new IOException("Similarity service returned HTTP "
+                    + response.getStatusCode().value() + ": " + response.getBody());
+        }
+
+        JsonNode json = objectMapper.readTree(response.getBody());
+        JsonNode embeddingNode = json.get("embedding");
+        if (embeddingNode == null || !embeddingNode.isArray()) {
+            throw new IOException("Similarity service response did not contain a valid embedding array");
+        }
+
+        float[] embedding = new float[embeddingNode.size()];
+        for (int i = 0; i < embeddingNode.size(); i++) {
+            embedding[i] = (float) embeddingNode.get(i).asDouble();
+        }
+        return embedding;
     }
 }
