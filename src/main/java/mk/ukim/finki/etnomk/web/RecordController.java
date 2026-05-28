@@ -2,6 +2,7 @@ package mk.ukim.finki.etnomk.web;
 
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.service.*;
+import mk.ukim.finki.etnomk.service.impl.ImageServiceImpl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,11 +21,11 @@ public class RecordController {
     private final CategoryService categoryService;
     private final MaterialService materialService;
     private final TechniqueService techniqueService;
-    private final ImageService imageService;
+    private final ImageServiceImpl imageService;
 
     public RecordController(RecordService recordService, RegionService regionService,
                             CategoryService categoryService, MaterialService materialService,
-                            TechniqueService techniqueService, ImageService imageService) {
+                            TechniqueService techniqueService, ImageServiceImpl imageService) {
         this.recordService = recordService;
         this.regionService = regionService;
         this.categoryService = categoryService;
@@ -56,7 +57,6 @@ public class RecordController {
             @RequestParam(required = false) Long categoryId) {
 
         List<Record> results = recordService.findAll();
-
         if (regionId != null) {
             results = results.stream()
                     .filter(r -> r.getRegion().getRegionId().equals(regionId))
@@ -88,19 +88,11 @@ public class RecordController {
             record.setDateCreated(LocalDate.now());
             record.setRegion(regionService.findById(regionId).orElse(null));
             record.setCategory(categoryService.findById(categoryId).orElse(null));
-
-            if (materialId != null) {
-                record.setMaterial(materialService.findById(materialId).orElse(null));
-            }
-            if (techniqueId != null) {
-                record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
-            }
+            if (materialId != null) record.setMaterial(materialService.findById(materialId).orElse(null));
+            if (techniqueId != null) record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
 
             Record saved = recordService.createRecord(record);
-
-            if (image != null && !image.isEmpty()) {
-                imageService.uploadImage(image, saved);
-            }
+            if (image != null && !image.isEmpty()) imageService.uploadImage(image, saved);
 
             return ResponseEntity.ok(recordService.findById(saved.getRecordId()).orElse(saved));
         } catch (Exception e) {
@@ -110,12 +102,12 @@ public class RecordController {
 
     /**
      * GET /api/records/{id}/similar
-     * Returns up to 5 records visually similar to the record's primary image.
+     * Region boost is applied automatically using the record's own region.
      */
     @GetMapping("/{id}/similar")
     public ResponseEntity<?> getSimilar(
             @PathVariable Long id,
-            @RequestParam(defaultValue = "5") int limit) {
+            @RequestParam(defaultValue = "20") int limit) {
         return recordService.findById(id)
                 .<ResponseEntity<?>>map(record ->
                         ResponseEntity.ok(imageService.findSimilarRecords(id, limit))
@@ -125,23 +117,24 @@ public class RecordController {
 
     /**
      * POST /api/records/similar-by-image
-     * Accepts a multipart image upload and returns records visually similar to it.
-     * No authentication required — anyone can do a pattern search.
+     * Accepts a multipart image and an optional regionId hint.
+     * If regionId is provided, results from that region are ranked higher.
+     * If omitted, results are ranked by pattern similarity only.
      */
     @PostMapping("/similar-by-image")
     public ResponseEntity<?> getSimilarByImage(
             @RequestParam("image") MultipartFile image,
-            @RequestParam(defaultValue = "5") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) Long regionId) {
 
         if (image == null || image.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "No image provided"));
         }
         try {
-            List<Record> similar = imageService.findSimilarByUpload(image, limit);
+            List<Record> similar = imageService.findSimilarByUpload(image, limit, regionId);
             return ResponseEntity.ok(similar);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Similarity search failed: " + e.getMessage()));

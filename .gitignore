@@ -44,3 +44,20 @@ uploads/
 ### Frontend build output ###
 frontend/node_modules/
 frontend/dist/
+
+### Python / similarity service ###
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+similarity-service/__pycache__/
+
+### Model / cache artifacts ###
+.cache/
+models/
+*.pt
+*.pth
+*.onnx

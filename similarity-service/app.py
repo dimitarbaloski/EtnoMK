@@ -1,19 +1,18 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import io
 import logging
+
 import numpy as np
 import torch
-import torchvision.models as models
-import torchvision.transforms as transforms
-from math import ceil
+import torch.nn.functional as F
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from transformers import AutoImageProcessor, AutoModel
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("etnomk-similarity")
+logger = logging.getLogger("etnomk-dinov2")
 
 app = FastAPI(title="EtnoMK Similarity Service")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,166 +20,236 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logger.info("Loading ResNet50 similarity model")
-model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-model = torch.nn.Sequential(*list(model.children())[:-1])
-model.eval()
-logger.info("Similarity model loaded")
-
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
-
-EMBEDDING_DIM = 2048
-FULL_IMAGE_WEIGHT = 0.45
-CROP_WEIGHT = 0.45
-COLOR_WEIGHT = 0.10
+DEVICE = "cpu"
 LOW_RES_MIN_SIDE = 320
+PATCH_SIZE = 256
+PATCH_STRIDE = 128
+MAX_PATCHES = 49
+
+logger.info("Loading DINOv2 model...")
+processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
+model = AutoModel.from_pretrained("facebook/dinov2-base")
+model.eval()
+model.to(DEVICE)
+logger.info("DINOv2 loaded successfully")
 
 
-def l2_normalize(vector: np.ndarray) -> np.ndarray:
-    norm = np.linalg.norm(vector)
+def l2_normalize(x: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(x)
     if norm == 0:
-        return vector
-    return vector / norm
-
-
-def encode_patch(image: Image.Image) -> np.ndarray:
-    tensor = transform(image).unsqueeze(0)
-    with torch.no_grad():
-        embedding = model(tensor).squeeze().cpu().numpy().astype(np.float32)
-    return l2_normalize(embedding)
-
-
-def build_patch_views(image: Image.Image) -> list[Image.Image]:
-    width, height = image.size
-    min_side = min(width, height)
-    crop_size = max(int(min_side * 0.72), 64)
-
-    if crop_size >= min_side:
-        return [image]
-
-    center_x = max((width - crop_size) // 2, 0)
-    center_y = max((height - crop_size) // 2, 0)
-
-    positions = [
-        (0, 0),
-        (width - crop_size, 0),
-        (0, height - crop_size),
-        (width - crop_size, height - crop_size),
-        (center_x, center_y),
-    ]
-
-    views = []
-    seen = set()
-    for x, y in positions:
-        left = int(max(x, 0))
-        top = int(max(y, 0))
-        right = int(min(left + crop_size, width))
-        bottom = int(min(top + crop_size, height))
-        box = (left, top, right, bottom)
-        if box in seen:
-            continue
-        seen.add(box)
-        views.append(image.crop(box))
-    return views
-
-
-def extract_color_signature(image: Image.Image) -> np.ndarray:
-    hsv = np.asarray(image.convert("HSV").resize((128, 128)), dtype=np.float32)
-    hue = hsv[:, :, 0] / 255.0
-    sat = hsv[:, :, 1] / 255.0
-    val = hsv[:, :, 2] / 255.0
-
-    histogram, _ = np.histogramdd(
-        sample=np.stack([hue.ravel(), sat.ravel(), val.ravel()], axis=1),
-        bins=(8, 4, 4),
-        range=((0.0, 1.0), (0.0, 1.0), (0.0, 1.0)),
-    )
-
-    signature = histogram.flatten().astype(np.float32)
-    signature = l2_normalize(signature)
-
-    repeats = int(np.ceil(EMBEDDING_DIM / signature.size))
-    projected = np.tile(signature, repeats)[:EMBEDDING_DIM]
-    return l2_normalize(projected.astype(np.float32))
+        return x
+    return x / norm
 
 
 def upscale_for_low_resolution(image: Image.Image) -> Image.Image:
     width, height = image.size
     min_side = min(width, height)
+
     if min_side >= LOW_RES_MIN_SIDE:
         return image
 
-    scale = ceil(LOW_RES_MIN_SIDE / max(min_side, 1))
+    scale = LOW_RES_MIN_SIDE / min_side
     resized = image.resize(
-        (max(width * scale, LOW_RES_MIN_SIDE), max(height * scale, LOW_RES_MIN_SIDE)),
+        (int(width * scale), int(height * scale)),
         Image.Resampling.LANCZOS,
     )
     enhanced = ImageOps.autocontrast(resized)
     enhanced = ImageEnhance.Contrast(enhanced).enhance(1.08)
-    enhanced = enhanced.filter(ImageFilter.UnsharpMask(radius=1.6, percent=180, threshold=3))
-    return enhanced
+    return enhanced.filter(
+        ImageFilter.UnsharpMask(radius=1.6, percent=180, threshold=3)
+    )
 
 
-def build_image_variants(image: Image.Image) -> list[Image.Image]:
+def build_variants(image: Image.Image) -> list[Image.Image]:
     base = ImageOps.exif_transpose(image).convert("RGB")
     variants = [base]
 
-    low_res_variant = upscale_for_low_resolution(base)
-    if low_res_variant.size != base.size:
-        variants.append(low_res_variant)
+    enhanced = upscale_for_low_resolution(base)
+    if enhanced.size != base.size:
+        variants.append(enhanced)
 
-    contrast_variant = ImageOps.autocontrast(base)
-    contrast_variant = ImageEnhance.Sharpness(contrast_variant).enhance(1.15)
-    variants.append(contrast_variant)
-
+    contrast = ImageOps.autocontrast(base)
+    variants.append(ImageEnhance.Sharpness(contrast).enhance(1.15))
     return variants
+
+
+def build_multi_scale_views(image: Image.Image) -> list[Image.Image]:
+    width, height = image.size
+    views = [image]
+
+    for scale in (0.9, 0.7, 0.5):
+        crop_w = int(width * scale)
+        crop_h = int(height * scale)
+        positions = [
+            (0, 0),
+            (width - crop_w, 0),
+            (0, height - crop_h),
+            (width - crop_w, height - crop_h),
+            ((width - crop_w) // 2, (height - crop_h) // 2),
+        ]
+
+        for x, y in positions:
+            x = max(x, 0)
+            y = max(y, 0)
+            views.append(image.crop((x, y, x + crop_w, y + crop_h)))
+
+    return views
+
+
+def extract_patch_embedding(image: Image.Image) -> np.ndarray:
+    inputs = processor(images=image, return_tensors="pt").to(DEVICE)
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        patch_tokens = outputs.last_hidden_state[:, 1:, :]
+        mean_pool = patch_tokens.mean(dim=1)
+        max_pool = patch_tokens.max(dim=1).values
+        embedding = torch.cat([mean_pool, max_pool], dim=1)
+        embedding = F.normalize(embedding, p=2, dim=1)
+
+    return embedding.squeeze().cpu().numpy().astype(np.float32)
+
+
+def extract_fft_features(image: Image.Image) -> np.ndarray:
+    gray = image.convert("L").resize((128, 128))
+    arr = np.asarray(gray).astype(np.float32)
+    fft = np.fft.fft2(arr)
+    fft_shift = np.fft.fftshift(fft)
+    magnitude = np.abs(fft_shift).flatten()[:512].astype(np.float32)
+    return l2_normalize(magnitude)
+
+
+def combine_visual_and_texture_features(image: Image.Image, patch_embedding: np.ndarray) -> np.ndarray:
+    fft_features = extract_fft_features(image)
+    fft_padded = np.pad(fft_features, (0, len(patch_embedding) - len(fft_features)))
+    return l2_normalize((0.90 * patch_embedding) + (0.10 * fft_padded))
+
+
+def extract_pattern_embedding(image: Image.Image) -> np.ndarray:
+    patch_embedding = extract_patch_embedding(image)
+    return combine_visual_and_texture_features(image, patch_embedding)
+
+
+def build_pattern_patches(image: Image.Image) -> list[dict]:
+    base = ImageOps.exif_transpose(image).convert("RGB")
+    base = upscale_for_low_resolution(base)
+    width, height = base.size
+
+    if width <= PATCH_SIZE or height <= PATCH_SIZE:
+        return [{
+            "image": base,
+            "x": 0,
+            "y": 0,
+            "width": width,
+            "height": height,
+        }]
+
+    xs = list(range(0, max(width - PATCH_SIZE, 0) + 1, PATCH_STRIDE))
+    ys = list(range(0, max(height - PATCH_SIZE, 0) + 1, PATCH_STRIDE))
+
+    if xs[-1] != width - PATCH_SIZE:
+        xs.append(width - PATCH_SIZE)
+    if ys[-1] != height - PATCH_SIZE:
+        ys.append(height - PATCH_SIZE)
+
+    patches = []
+    for y in ys:
+        for x in xs:
+            patches.append({
+                "image": base.crop((x, y, x + PATCH_SIZE, y + PATCH_SIZE)),
+                "x": x,
+                "y": y,
+                "width": PATCH_SIZE,
+                "height": PATCH_SIZE,
+            })
+
+    if len(patches) <= MAX_PATCHES:
+        return patches
+
+    step = len(patches) / MAX_PATCHES
+    return [patches[int(i * step)] for i in range(MAX_PATCHES)]
 
 
 def extract_embedding(image_bytes: bytes) -> list[float]:
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    variants = build_image_variants(image)
+    embeddings = []
 
-    variant_embeddings = []
-    for variant in variants:
-        global_embedding = encode_patch(variant)
-
-        patch_views = build_patch_views(variant)
-        patch_embeddings = [encode_patch(view) for view in patch_views]
+    for variant in build_variants(image):
+        patch_embeddings = [
+            extract_patch_embedding(view)
+            for view in build_multi_scale_views(variant)
+        ]
         patch_embedding = l2_normalize(np.mean(patch_embeddings, axis=0))
+        embeddings.append(combine_visual_and_texture_features(variant, patch_embedding))
 
-        color_embedding = extract_color_signature(variant)
-
-        combined = (
-            FULL_IMAGE_WEIGHT * global_embedding
-            + CROP_WEIGHT * patch_embedding
-            + COLOR_WEIGHT * color_embedding
-        )
-        variant_embeddings.append(l2_normalize(combined.astype(np.float32)))
-
-    final_embedding = l2_normalize(np.mean(variant_embeddings, axis=0).astype(np.float32))
+    final_embedding = l2_normalize(np.mean(embeddings, axis=0))
     return final_embedding.tolist()
+
+
+def extract_patch_embeddings(image_bytes: bytes) -> list[dict]:
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    patches = []
+
+    for patch in build_pattern_patches(image):
+        embedding = extract_pattern_embedding(patch["image"])
+        patches.append({
+            "x": patch["x"],
+            "y": patch["y"],
+            "width": patch["width"],
+            "height": patch["height"],
+            "embedding": embedding.tolist(),
+        })
+
+    return patches
+
+
+async def read_image_upload(image: UploadFile) -> bytes:
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Empty image")
+
+    return image_bytes
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "modelLoaded": True}
+    return {
+        "status": "ok",
+        "model": "DINOv2-base",
+        "patch_tokens": True,
+    }
 
 
 @app.post("/embed")
 async def embed(image: UploadFile = File(...)):
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    image_bytes = await image.read()
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="Empty image file")
+    image_bytes = await read_image_upload(image)
+
     try:
         embedding = extract_embedding(image_bytes)
     except Exception as e:
-        logger.exception("Embedding generation failed")
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
-    return {"embedding": embedding, "dimensions": len(embedding)}
+        logger.exception("Embedding extraction failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return {
+        "embedding": embedding,
+        "dimensions": len(embedding),
+    }
+
+
+@app.post("/embed-patches")
+async def embed_patches(image: UploadFile = File(...)):
+    image_bytes = await read_image_upload(image)
+
+    try:
+        patches = extract_patch_embeddings(image_bytes)
+    except Exception as e:
+        logger.exception("Patch embedding extraction failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return {
+        "patches": patches,
+        "dimensions": len(patches[0]["embedding"]) if patches else 0,
+    }

@@ -1,89 +1,78 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Layout from "../../components/Layout";
-import { recordsApi } from "../../api/api";
+import { recordsApi, regionsApi } from "../../api/api";
 
-// ─── Small reusable card for similar results ─────────────────────────────────
 function SimilarCard({ record }) {
   const navigate = useNavigate();
+  const image = record.images?.[0];
+
   return (
-    <div
+    <button
+      type="button"
+      className="similar-result-card"
       onClick={() => navigate(`/records/${record.recordId}`)}
-      style={{
-        cursor: "pointer",
-        borderRadius: "8px",
-        overflow: "hidden",
-        background: "#fff",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
-        transition: "transform 0.15s, box-shadow 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-3px)";
-        e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.15)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)";
-      }}
     >
-      <div style={{ width: "100%", height: "140px", background: "#f0e8d8", overflow: "hidden" }}>
-        {record.images && record.images.length > 0 ? (
-          <img
-            src={record.images[0].imagePath}
-            alt={record.title}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
+      <div className="similar-result-image">
+        {image ? (
+          <img src={image.imagePath} alt={record.title} />
         ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#aaa", fontSize: "0.85rem" }}>
-            No Image
-          </div>
+          <div className="similar-result-placeholder">No Image</div>
         )}
       </div>
-      <div style={{ padding: "0.75rem" }}>
-        <div style={{ fontWeight: "600", color: "#5C1A1A", fontSize: "0.9rem", marginBottom: "0.25rem" }}>
-          {record.title}
-        </div>
-        {record.category && (
-          <div style={{ fontSize: "0.78rem", color: "#888" }}>{record.category.name}</div>
-        )}
-        {record.region && (
-          <div style={{ fontSize: "0.78rem", color: "#888" }}>{record.region.name}</div>
-        )}
+
+      <div className="similar-result-content">
+        <div className="similar-result-title">{record.title}</div>
+        {record.region?.name && <div className="similar-result-region">{record.region.name}</div>}
       </div>
-    </div>
+    </button>
   );
 }
 
-// ─── Similar results panel ────────────────────────────────────────────────────
-function SimilarPanel({ recordId, onClose }) {
-  const [mode, setMode] = useState("record"); // "record" | "upload"
+function SimilarPanel({ recordId, record, onClose }) {
+  const [mode, setMode] = useState("record");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [recordSearchKey, setRecordSearchKey] = useState(0);
   const [uploadFile, setUploadFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const fileInputRef = useRef();
+  const [regions, setRegions] = useState([]);
+  const [selectedRegion, setSelectedRegion] = useState("");
+  const fileInputRef = useRef(null);
 
-  // Auto-search by record's own image when panel opens
   useEffect(() => {
-    if (mode === "record") {
-      setLoading(true);
-      setError(null);
-      setResults(null);
-      recordsApi
-        .getSimilar(recordId)
-        .then((data) => {
-          if (Array.isArray(data)) setResults(data);
-          else setError("Unexpected response from server.");
-        })
-        .catch(() => setError("Could not reach the server."))
-        .finally(() => setLoading(false));
-    }
-  }, [mode, recordId]);
+    regionsApi.getAll().then(setRegions).catch(() => {});
+  }, []);
 
-  function handleFileChange(e) {
-    const file = e.target.files[0];
+  useEffect(() => {
+    if (mode !== "record") return;
+
+    setLoading(true);
+    setError(null);
+    setResults(null);
+
+    recordsApi
+      .getSimilar(recordId)
+      .then((data) => {
+        if (Array.isArray(data)) setResults(data);
+        else setError("Unexpected response from server.");
+      })
+      .catch(() => setError("Could not reach the server."))
+      .finally(() => setLoading(false));
+  }, [mode, recordId, recordSearchKey]);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
     if (!file) return;
+
+    if (preview) URL.revokeObjectURL(preview);
     setUploadFile(file);
     setPreview(URL.createObjectURL(file));
     setResults(null);
@@ -92,11 +81,13 @@ function SimilarPanel({ recordId, onClose }) {
 
   function handleUploadSearch() {
     if (!uploadFile) return;
+
     setLoading(true);
     setError(null);
     setResults(null);
+
     recordsApi
-      .getSimilarByImage(uploadFile)
+      .getSimilarByImage(uploadFile, 20, selectedRegion || null)
       .then((data) => {
         if (Array.isArray(data)) setResults(data);
         else setError(data.error || "Unexpected response.");
@@ -105,175 +96,125 @@ function SimilarPanel({ recordId, onClose }) {
       .finally(() => setLoading(false));
   }
 
+  const recordImage = record?.images?.[0];
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "#FAF0DC",
-          borderRadius: "12px",
-          width: "100%",
-          maxWidth: "780px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "1.25rem 1.5rem",
-            borderBottom: "2px solid #e0c89a",
-            background: "#F5E6C8",
-            borderRadius: "12px 12px 0 0",
-          }}
-        >
-          <h3 style={{ color: "#5C1A1A", margin: 0 }}>🔍 Similar Patterns</h3>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "1.4rem",
-              cursor: "pointer",
-              color: "#5C1A1A",
-              lineHeight: 1,
-            }}
-          >
-            ×
+    <div className="similar-modal-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="similar-modal" role="dialog" aria-modal="true" aria-labelledby="similar-title">
+        <div className="similar-modal-header">
+          <div>
+            <h3 id="similar-title">Similar Items</h3>
+            <p>Compare the full record image or upload a close visual detail.</p>
+          </div>
+          <button type="button" className="similar-close-btn" onClick={onClose} aria-label="Close">
+            x
           </button>
         </div>
 
-        {/* Mode tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #e0c89a", background: "#F5E6C8" }}>
-          {[
-            { key: "record", label: "Use this record's image" },
-            { key: "upload", label: "Upload a pattern" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => { setMode(key); setResults(null); setError(null); }}
-              style={{
-                flex: 1,
-                padding: "0.75rem",
-                border: "none",
-                borderBottom: mode === key ? "3px solid #7A1C1C" : "3px solid transparent",
-                background: "transparent",
-                color: mode === key ? "#7A1C1C" : "#888",
-                fontWeight: mode === key ? "700" : "500",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                transition: "color 0.15s",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="similar-tabs">
+          <button
+            type="button"
+            className={mode === "record" ? "similar-tab active" : "similar-tab"}
+            onClick={() => setMode("record")}
+          >
+            Record image
+          </button>
+          <button
+            type="button"
+            className={mode === "upload" ? "similar-tab active" : "similar-tab"}
+            onClick={() => setMode("upload")}
+          >
+            Upload image
+          </button>
         </div>
 
-        <div style={{ padding: "1.5rem" }}>
-          {/* Upload mode UI */}
-          {mode === "upload" && (
-            <div style={{ marginBottom: "1.25rem" }}>
-              <div
-                onClick={() => fileInputRef.current.click()}
-                style={{
-                  border: "2px dashed #c9a96e",
-                  borderRadius: "8px",
-                  padding: "2rem",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  background: "#fff",
-                  marginBottom: "1rem",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#fdf5e0")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-              >
-                {preview ? (
-                  <img src={preview} alt="preview" style={{ maxHeight: "180px", maxWidth: "100%", borderRadius: "6px" }} />
-                ) : (
-                  <>
-                    <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🖼️</div>
-                    <p style={{ color: "#888", margin: 0 }}>Click to select an image file</p>
-                    <p style={{ color: "#aaa", fontSize: "0.8rem", marginTop: "0.25rem" }}>JPG, PNG, WEBP</p>
-                  </>
-                )}
+        <div className="similar-modal-body">
+          {mode === "record" && (
+            <div className="similar-mode-panel">
+              <div className="similar-record-preview">
+                <div className="similar-record-thumb">
+                  {recordImage ? <img src={recordImage.imagePath} alt={record.title} /> : <span>No Image</span>}
+                </div>
+                <div>
+                  <h4>Search from this record</h4>
+                  <p>{record?.title}</p>
+                  {record?.region?.name && <span>{record.region.name}</span>}
+                </div>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={handleFileChange}
-              />
               <button
-                onClick={handleUploadSearch}
-                disabled={!uploadFile || loading}
+                type="button"
                 className="btn btn-primary"
-                style={{ width: "100%", opacity: !uploadFile || loading ? 0.6 : 1 }}
+                onClick={() => setRecordSearchKey((key) => key + 1)}
+                disabled={loading}
               >
-                {loading ? "Searching…" : "Find Similar Records"}
+                Refresh Results
               </button>
             </div>
           )}
 
-          {/* Loading */}
-          {loading && (
-            <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⏳</div>
-              <p>Running pattern similarity search…</p>
-            </div>
-          )}
+          {mode === "upload" && (
+            <div className="similar-upload-panel">
+              <button
+                type="button"
+                className={preview ? "similar-dropzone has-preview" : "similar-dropzone"}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {preview ? (
+                  <img src={preview} alt="Uploaded image preview" />
+                ) : (
+                  <span>
+                    <strong>Choose an image detail</strong>
+                    <span>Upload a close crop or full photo of the object, decoration, shape, material, or detail.</span>
+                  </span>
+                )}
+              </button>
 
-          {/* Error */}
-          {error && !loading && (
-            <div style={{ background: "#fde8e8", border: "1px solid #f5c6c6", borderRadius: "8px", padding: "1rem", color: "#7a1c1c" }}>
-              {error}
-            </div>
-          )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="visually-hidden-file"
+                accept="image/*"
+              />
 
-          {/* Results */}
-          {results && !loading && (
-            <>
-              {results.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>
-                  <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🧵</div>
-                  <p>No similar records found. Try adding more records with images.</p>
-                </div>
-              ) : (
-                <>
-                  <p style={{ color: "#666", marginBottom: "1rem", fontSize: "0.9rem" }}>
-                    Found <strong>{results.length}</strong> visually similar record{results.length !== 1 ? "s" : ""}:
-                  </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-                      gap: "1rem",
-                    }}
-                  >
-                    {results.map((r) => (
-                      <SimilarCard key={r.recordId} record={r} />
+              <div className="similar-upload-controls">
+                <label>
+                  Region
+                  <select value={selectedRegion} onChange={(event) => setSelectedRegion(event.target.value)}>
+                    <option value="">All regions</option>
+                    {regions.map((region) => (
+                      <option key={region.regionId} value={region.regionId}>
+                        {region.name}
+                      </option>
                     ))}
-                  </div>
-                </>
-              )}
-            </>
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleUploadSearch}
+                  disabled={loading || !uploadFile}
+                >
+                  Search Similar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loading && <div className="similar-state">Searching similar items...</div>}
+          {error && <div className="similar-error">{error}</div>}
+
+          {results?.length > 0 && (
+            <div className="similar-results-grid">
+              {results.map((result) => (
+                <SimilarCard key={result.recordId} record={result} />
+              ))}
+            </div>
+          )}
+
+          {results && results.length === 0 && !loading && (
+            <div className="similar-empty">No close visual matches were found.</div>
           )}
         </div>
       </div>
@@ -281,163 +222,121 @@ function SimilarPanel({ recordId, onClose }) {
   );
 }
 
-// ─── Main RecordDetail page ───────────────────────────────────────────────────
+function InfoRow({ label, value }) {
+  if (!value) return null;
+
+  return (
+    <div className="record-info-row">
+      <div className="record-info-label">{label}</div>
+      <div className="record-info-value">{value}</div>
+    </div>
+  );
+}
+
 export default function RecordDetail() {
   const { id } = useParams();
   const [record, setRecord] = useState(null);
-  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState(null);
   const [showSimilar, setShowSimilar] = useState(false);
 
   useEffect(() => {
+    setRecord(null);
+    setError(null);
+
     recordsApi
       .getById(id)
       .then((data) => {
-        if (data && data.recordId) setRecord(data);
-        else setNotFound(true);
+        if (data?.recordId) setRecord(data);
+        else setError("Record not found.");
       })
-      .catch(() => setNotFound(true));
+      .catch(() => setError("Could not load this record."));
   }, [id]);
 
-  if (notFound) {
+  if (error) {
     return (
       <Layout>
-        <div className="breadcrumb">
-          <Link to="/">Home</Link> / Record Not Found
+        <div className="container">
+          <div className="breadcrumb">
+            <Link to="/">Home</Link> / <Link to="/records/view">Browse Records</Link> / Record
+          </div>
+          <div className="card">
+            <h2>Record Not Found</h2>
+            <p>{error}</p>
+            <Link to="/records/view" className="btn btn-primary record-back-link">
+              Back to Records
+            </Link>
+          </div>
         </div>
-        <h2>Record Not Found</h2>
-        <p>The record you're looking for doesn't exist.</p>
-        <Link to="/records/view" className="btn btn-primary" style={{ marginTop: "1rem", display: "inline-block" }}>
-          Back to Records
-        </Link>
       </Layout>
     );
   }
 
-  if (!record) return <Layout><p style={{ padding: "2rem" }}>Loading...</p></Layout>;
+  if (!record) {
+    return (
+      <Layout>
+        <div className="container">Loading...</div>
+      </Layout>
+    );
+  }
+
+  const images = record.images || [];
+  const primaryImage = images[0];
 
   return (
     <Layout>
-      {showSimilar && (
-        <SimilarPanel recordId={id} onClose={() => setShowSimilar(false)} />
-      )}
+      {showSimilar && <SimilarPanel recordId={id} record={record} onClose={() => setShowSimilar(false)} />}
 
-      <div className="breadcrumb">
-        <Link to="/">Home</Link> / <Link to="/records/view">Browse Records</Link> / {record.title}
-      </div>
+      <div className="container">
+        <div className="breadcrumb">
+          <Link to="/">Home</Link> / <Link to="/records/view">Browse Records</Link> / {record.title}
+        </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "2rem",
-          marginBottom: "2rem",
-        }}
-      >
-        {/* Image column */}
-        <div>
-          <div
-            style={{
-              width: "100%",
-              height: "400px",
-              background: "#f0e8d8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "8px",
-              overflow: "hidden",
-              marginBottom: "1rem",
-            }}
-          >
-            {record.images && record.images.length > 0 ? (
-              <img
-                src={record.images[0].imagePath}
-                alt={record.title}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              <span style={{ color: "#999" }}>No Image</span>
+        <div className="record-detail-grid">
+          <div className="record-detail-image">
+            {primaryImage ? <img src={primaryImage.imagePath} alt={record.title} /> : <span>No Image</span>}
+          </div>
+
+          <section>
+            <h2 className="record-detail-title">{record.title}</h2>
+
+            <div className="card record-info-card">
+              <InfoRow label="Category" value={record.category?.name} />
+              <InfoRow label="Region" value={record.region?.name} />
+              <InfoRow label="Material" value={record.material?.name} />
+              <InfoRow label="Technique" value={record.technique?.name} />
+              <InfoRow label="Date Created" value={record.dateCreated} />
+            </div>
+
+            {record.description && (
+              <div className="card">
+                <h3 className="record-section-title">Description</h3>
+                <p>{record.description}</p>
+              </div>
             )}
-          </div>
 
-          {/* Search Similar button lives right under the image */}
-          <button
-            onClick={() => setShowSimilar(true)}
-            style={{
-              width: "100%",
-              padding: "0.75rem 1.5rem",
-              background: "linear-gradient(135deg, #7A1C1C, #5C1A1A)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "1rem",
-              fontWeight: "600",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              boxShadow: "0 4px 12px rgba(92,26,26,0.3)",
-              transition: "opacity 0.2s, transform 0.2s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.9"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "translateY(0)"; }}
-          >
-            🔍 Search Similar
-          </button>
+            <div className="record-actions">
+              <button type="button" className="btn btn-primary" onClick={() => setShowSimilar(true)}>
+                Search Similar
+              </button>
+              <Link to="/records/view" className="btn btn-secondary">
+                Back to Records
+              </Link>
+            </div>
+          </section>
         </div>
 
-        {/* Info column */}
-        <div>
-          <h2 style={{ marginBottom: "1rem" }}>{record.title}</h2>
-
-          {record.category && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontWeight: "600", color: "#5C1A1A", marginBottom: "0.5rem" }}>Category</div>
-              <div style={{ color: "#666" }}>{record.category.name}</div>
+        {images.length > 1 && (
+          <section className="record-gallery">
+            <h2>Gallery</h2>
+            <div className="grid">
+              {images.map((image) => (
+                <div className="record-image" key={image.imageId || image.imagePath}>
+                  <img src={image.imagePath} alt={record.title} />
+                </div>
+              ))}
             </div>
-          )}
-
-          {record.region && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontWeight: "600", color: "#5C1A1A", marginBottom: "0.5rem" }}>Region</div>
-              <div style={{ color: "#666" }}>{record.region.name}</div>
-            </div>
-          )}
-
-          {record.material && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontWeight: "600", color: "#5C1A1A", marginBottom: "0.5rem" }}>Material</div>
-              <div style={{ color: "#666" }}>{record.material.name}</div>
-            </div>
-          )}
-
-          {record.technique && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontWeight: "600", color: "#5C1A1A", marginBottom: "0.5rem" }}>Technique</div>
-              <div style={{ color: "#666" }}>{record.technique.name}</div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <div style={{ fontWeight: "600", color: "#5C1A1A", marginBottom: "0.5rem" }}>Date Created</div>
-            <div style={{ color: "#666" }}>{record.dateCreated}</div>
-          </div>
-
-          {record.description && (
-            <div style={{ background: "#F5E6C8", padding: "1.5rem", borderRadius: "8px", marginTop: "1rem" }}>
-              <h3 style={{ color: "#5C1A1A", marginBottom: "1rem" }}>Description</h3>
-              <p>{record.description}</p>
-            </div>
-          )}
-
-          <Link
-            to="/records/view"
-            className="btn btn-primary"
-            style={{ marginTop: "1.5rem", display: "inline-block" }}
-          >
-            Back to Records
-          </Link>
-        </div>
+          </section>
+        )}
       </div>
     </Layout>
   );

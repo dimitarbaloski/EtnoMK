@@ -102,7 +102,7 @@ export default function CreateRecord() {
           <div className="form-group">
             <label htmlFor="image">Upload Image</label>
             <input type="file" id="image" name="image" accept="image/*" />
-            <div className="help-text">Upload an image of the traditional item (optional)</div>
+            <div className="help-text">Upload an image of the traditional item</div>
           </div>
 
           <div className="form-actions">

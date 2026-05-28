@@ -45,13 +45,21 @@ export const recordsApi = {
    * @param {File} file  - the image file to compare against
    * @param {number} limit - max results
    */
-  getSimilarByImage: (file, limit = 5) => {
-    const formData = new FormData();
-    formData.append("image", file);
-    return fetch(`${BASE_URL}/records/similar-by-image?limit=${limit}`, {
-      method: "POST",
-      body: formData,
-    }).then((r) => r.json());
+  getSimilarByImage: (file, limit = 5, regionId = null) => {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const params = new URLSearchParams();
+      params.append("limit", limit);
+      if (regionId) params.append("regionId", regionId);
+
+      return fetch(
+          `${BASE_URL}/records/similar-by-image?${params.toString()}`,
+          {
+              method: "POST",
+              body: formData,
+          }
+      ).then((r) => r.json());
   },
 
   search: (keyword) =>

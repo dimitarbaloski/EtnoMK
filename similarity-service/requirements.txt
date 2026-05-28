@@ -3,3 +3,11 @@ uvicorn[standard]
 numpy==1.26.4
 pillow
 python-multipart
+
+torch==2.4.1
+torchvision==0.19.1
+
+transformers==4.48.0
+timm
+einops
+scipy

@@ -24,7 +24,7 @@ public class Image {
     private Record record;
 
     @JdbcTypeCode(SqlTypes.VECTOR)
-    @Array(length = 2048)
+    @Array(length = 1536)
     private float[] embedding;
 
 
