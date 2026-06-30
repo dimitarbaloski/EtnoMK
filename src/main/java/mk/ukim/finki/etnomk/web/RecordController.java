@@ -1,22 +1,19 @@
 package mk.ukim.finki.etnomk.web;
 
 import mk.ukim.finki.etnomk.model.Record;
-import mk.ukim.finki.etnomk.service.RecordService;
-import mk.ukim.finki.etnomk.service.RegionService;
-import mk.ukim.finki.etnomk.service.CategoryService;
-import mk.ukim.finki.etnomk.service.MaterialService;
-import mk.ukim.finki.etnomk.service.TechniqueService;
-import mk.ukim.finki.etnomk.service.ImageService;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
+import mk.ukim.finki.etnomk.service.*;
+import mk.ukim.finki.etnomk.service.impl.ImageServiceImpl;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
-@Controller
-@RequestMapping("/records")
+@RestController
+@RequestMapping("/api/records")
 public class RecordController {
 
     private final RecordService recordService;
@@ -24,11 +21,11 @@ public class RecordController {
     private final CategoryService categoryService;
     private final MaterialService materialService;
     private final TechniqueService techniqueService;
-    private final ImageService imageService;
+    private final ImageServiceImpl imageService;
 
     public RecordController(RecordService recordService, RegionService regionService,
                             CategoryService categoryService, MaterialService materialService,
-                            TechniqueService techniqueService, ImageService imageService) {
+                            TechniqueService techniqueService, ImageServiceImpl imageService) {
         this.recordService = recordService;
         this.regionService = regionService;
         this.categoryService = categoryService;
@@ -37,91 +34,110 @@ public class RecordController {
         this.imageService = imageService;
     }
 
-    @GetMapping("/view")
-    public String viewRecords(Model model) {
-        model.addAttribute("records", recordService.findAll());
-        model.addAttribute("regions", regionService.findAll());
-        model.addAttribute("categories", categoryService.findAll());
-        return "records/view-records";
+    @GetMapping
+    public ResponseEntity<List<Record>> getAll() {
+        return ResponseEntity.ok(recordService.findAll());
     }
 
     @GetMapping("/{id}")
-    public String viewRecordDetail(@PathVariable Long id, Model model) {
-        recordService.findById(id).ifPresent(record -> model.addAttribute("record", record));
-        return "records/record-detail";
-    }
-
-    @GetMapping("/create")
-    public String createRecordForm(Model model) {
-        model.addAttribute("regions", regionService.findAll());
-        model.addAttribute("categories", categoryService.findAll());
-        model.addAttribute("materials", materialService.findAll());
-        model.addAttribute("techniques", techniqueService.findAll());
-        return "records/create-record";
-    }
-
-    @PostMapping("/create")
-    public String createRecord(@ModelAttribute Record record,
-                              @RequestParam(name = "regionId") Long regionId,
-                              @RequestParam(name = "categoryId") Long categoryId,
-                              @RequestParam(name = "materialId", required = false) Long materialId,
-                              @RequestParam(name = "techniqueId", required = false) Long techniqueId,
-                              @RequestParam(name = "image", required = false) MultipartFile imageFile) {
-
-        record.setDateCreated(LocalDate.now());
-        record.setRegion(regionService.findById(regionId).orElse(null));
-        record.setCategory(categoryService.findById(categoryId).orElse(null));
-
-        if (materialId != null) {
-            record.setMaterial(materialService.findById(materialId).orElse(null));
-        }
-        if (techniqueId != null) {
-            record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
-        }
-
-        Record savedRecord = recordService.createRecord(record);
-
-        if (imageFile != null && !imageFile.isEmpty()) {
-            try {
-                imageService.uploadImage(imageFile, savedRecord);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        return "redirect:/records/view";
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+        return recordService.findById(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/search")
-    public String searchRecords(@RequestParam(name = "keyword") String keyword, Model model) {
-        List<Record> searchResults = recordService.searchRecords(keyword);
-        model.addAttribute("records", searchResults);
-        model.addAttribute("keyword", keyword);
-        return "records/search-results";
+    public ResponseEntity<List<Record>> search(@RequestParam String keyword) {
+        return ResponseEntity.ok(recordService.searchRecords(keyword));
     }
 
     @GetMapping("/filter")
-    public String filterRecords(@RequestParam(name = "regionId", required = false) Long regionId,
-                               @RequestParam(name = "categoryId", required = false) Long categoryId,
-                               Model model) {
-        List<Record> filteredRecords = recordService.findAll();
+    public ResponseEntity<List<Record>> filter(
+            @RequestParam(required = false) Long regionId,
+            @RequestParam(required = false) Long categoryId) {
 
+        List<Record> results = recordService.findAll();
         if (regionId != null) {
-            filteredRecords = filteredRecords.stream()
+            results = results.stream()
                     .filter(r -> r.getRegion().getRegionId().equals(regionId))
                     .toList();
         }
-
         if (categoryId != null) {
-            filteredRecords = filteredRecords.stream()
+            results = results.stream()
                     .filter(r -> r.getCategory().getCategoryId().equals(categoryId))
                     .toList();
         }
-
-        model.addAttribute("records", filteredRecords);
-        model.addAttribute("regions", regionService.findAll());
-        model.addAttribute("categories", categoryService.findAll());
-        return "records/view-records";
+        return ResponseEntity.ok(results);
     }
 
+    @PostMapping("/create")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> create(
+            @RequestParam String title,
+            @RequestParam(required = false) String description,
+            @RequestParam Long regionId,
+            @RequestParam Long categoryId,
+            @RequestParam(required = false) Long materialId,
+            @RequestParam(required = false) Long techniqueId,
+            @RequestParam(required = false) MultipartFile image) {
+
+        try {
+            Record record = new Record();
+            record.setTitle(title);
+            record.setDescription(description);
+            record.setDateCreated(LocalDate.now());
+            record.setRegion(regionService.findById(regionId).orElse(null));
+            record.setCategory(categoryService.findById(categoryId).orElse(null));
+            if (materialId != null) record.setMaterial(materialService.findById(materialId).orElse(null));
+            if (techniqueId != null) record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
+
+            Record saved = recordService.createRecord(record);
+            if (image != null && !image.isEmpty()) imageService.uploadImage(image, saved);
+
+            return ResponseEntity.ok(recordService.findById(saved.getRecordId()).orElse(saved));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * GET /api/records/{id}/similar
+     * Region boost is applied automatically using the record's own region.
+     */
+    @GetMapping("/{id}/similar")
+    public ResponseEntity<?> getSimilar(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "20") int limit) {
+        return recordService.findById(id)
+                .<ResponseEntity<?>>map(record ->
+                        ResponseEntity.ok(imageService.findSimilarRecords(id, limit))
+                )
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * POST /api/records/similar-by-image
+     * Accepts a multipart image and an optional regionId hint.
+     * If regionId is provided, results from that region are ranked higher.
+     * If omitted, results are ranked by pattern similarity only.
+     */
+    @PostMapping("/similar-by-image")
+    public ResponseEntity<?> getSimilarByImage(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) Long regionId) {
+
+        if (image == null || image.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No image provided"));
+        }
+        try {
+            List<Record> similar = imageService.findSimilarByUpload(image, limit, regionId);
+            return ResponseEntity.ok(similar);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Similarity search failed: " + e.getMessage()));
+        }
+    }
 }

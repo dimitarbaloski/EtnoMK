@@ -1,5 +1,9 @@
 package mk.ukim.finki.etnomk.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import org.hibernate.annotations.Array;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -16,6 +20,12 @@ public class Image {
 
     @ManyToOne
     @JoinColumn(name = "record_id")
+    @JsonBackReference
     private Record record;
+
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    @Array(length = 1536)
+    private float[] embedding;
+
 
 }

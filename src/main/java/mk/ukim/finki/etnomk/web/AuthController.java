@@ -1,26 +1,25 @@
 package mk.ukim.finki.etnomk.web;
 
-import mk.ukim.finki.etnomk.model.User;
 import mk.ukim.finki.etnomk.model.Role;
+import mk.ukim.finki.etnomk.model.User;
 import mk.ukim.finki.etnomk.security.JwtConstants;
 import mk.ukim.finki.etnomk.security.JwtHelper;
 import mk.ukim.finki.etnomk.security.JwtLoginRequest;
 import mk.ukim.finki.etnomk.security.JwtLoginResponse;
 import mk.ukim.finki.etnomk.service.UserService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private final UserService userService;
@@ -33,48 +32,32 @@ public class AuthController {
         this.jwtHelper = jwtHelper;
     }
 
-    @GetMapping("/login")
-    public String login(@RequestParam(value = "error", required = false) String error,
-                       @RequestParam(value = "logout", required = false) String logout,
-                       Model model) {
-        if (error != null) {
-            model.addAttribute("error", "Invalid username or password");
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody JwtLoginRequest request) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+            String token = jwtHelper.generateToken((UserDetails) authentication.getPrincipal());
+            return ResponseEntity.ok(new JwtLoginResponse(token, "Bearer", JwtConstants.EXPIRATION_TIME));
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Invalid username or password"));
         }
-        if (logout != null) {
-            model.addAttribute("message", "You have been logged out successfully");
-        }
-        return "auth/login";
-    }
-
-    // No manual POST /login; Spring Security formLogin handles it on /perform_login
-
-    @PostMapping("/api/auth/login")
-    public ResponseEntity<JwtLoginResponse> jwtLogin(@RequestBody JwtLoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
-
-        String token = jwtHelper.generateToken((UserDetails) authentication.getPrincipal());
-        return ResponseEntity.ok(new JwtLoginResponse(token, "Bearer", JwtConstants.EXPIRATION_TIME));
-    }
-
-    @GetMapping("/register")
-    public String register() {
-        return "auth/register";
     }
 
     @PostMapping("/register")
-    public String registerUser(@RequestParam String username,
-                              @RequestParam String password,
-                              @RequestParam String email,
-                              @RequestParam String confirmPassword,
-                              RedirectAttributes redirectAttributes) {
-        try {
-            if (!password.equals(confirmPassword)) {
-                redirectAttributes.addFlashAttribute("error", "Passwords do not match");
-                return "redirect:/register";
-            }
+    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+        String username = body.get("username");
+        String password = body.get("password");
+        String email = body.get("email");
+        String confirmPassword = body.get("confirmPassword");
 
+        if (!password.equals(confirmPassword)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Passwords do not match"));
+        }
+
+        try {
             User user = new User();
             user.setUsername(username);
             user.setPassword(password);
@@ -82,11 +65,9 @@ public class AuthController {
             user.setRole(Role.ROLE_USER);
 
             userService.register(user);
-            redirectAttributes.addFlashAttribute("message", "Registration successful! Please login.");
-            return "redirect:/login";
+            return ResponseEntity.ok(Map.of("message", "Registration successful! Please login."));
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Registration failed: " + e.getMessage());
-            return "redirect:/register";
+            return ResponseEntity.badRequest().body(Map.of("error", "Registration failed: " + e.getMessage()));
         }
     }
 }
