@@ -1,4 +1,5 @@
 package mk.ukim.finki.etnomk.model;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import org.hibernate.annotations.Array;
@@ -18,10 +19,13 @@ public class Image {
 
     private String imagePath;
 
-    @ManyToOne
+    @ManyToOne  
     @JoinColumn(name = "record_id")
     @JsonBackReference
     private Record record;
+
+    @OneToMany(mappedBy = "image", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ImagePatternPatch> patches;
 
     @JdbcTypeCode(SqlTypes.VECTOR)
     @Array(length = 1536)
