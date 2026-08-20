@@ -7,7 +7,7 @@ export default function Home() {
   const [records, setRecords] = useState([]);
 
   useEffect(() => {
-    recordsApi.getAll().then((data) => setRecords(data)).catch(() => setRecords([]));
+    recordsApi.getAll(0, 6).then((data) => setRecords(data.content || data)).catch(() => setRecords([]));
   }, []);
 
   return (

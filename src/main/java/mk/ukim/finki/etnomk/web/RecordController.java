@@ -3,8 +3,16 @@ package mk.ukim.finki.etnomk.web;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.service.*;
 import mk.ukim.finki.etnomk.service.impl.ImageServiceImpl;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,8 +43,10 @@ public class RecordController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Record>> getAll() {
-        return ResponseEntity.ok(recordService.findAll());
+    public ResponseEntity<Page<Record>> getAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "9") int size) {
+        return ResponseEntity.ok(recordService.findAll(pageable(page, size)));
     }
 
     @GetMapping("/{id}")
@@ -47,38 +57,44 @@ public class RecordController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<Record>> search(@RequestParam String keyword) {
-        return ResponseEntity.ok(recordService.searchRecords(keyword));
+    public ResponseEntity<Page<Record>> search(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "9") int size) {
+        return ResponseEntity.ok(recordService.searchRecords(keyword, pageable(page, size)));
     }
 
     @GetMapping("/filter")
-    public ResponseEntity<List<Record>> filter(
+    public ResponseEntity<Page<Record>> filter(
             @RequestParam(required = false) Long regionId,
-            @RequestParam(required = false) Long categoryId) {
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "9") int size) {
 
         List<Record> results = recordService.findAll();
         if (regionId != null) {
             results = results.stream()
-                    .filter(r -> r.getRegion().getRegionId().equals(regionId))
+                    .filter(r -> r.getRegion() != null && r.getRegion().getRegionId().equals(regionId))
                     .toList();
         }
         if (categoryId != null) {
             results = results.stream()
-                    .filter(r -> r.getCategory().getCategoryId().equals(categoryId))
+                    .filter(r -> r.getCategory() != null && r.getCategory().getCategoryId().equals(categoryId))
                     .toList();
         }
-        return ResponseEntity.ok(results);
+        return ResponseEntity.ok(toPage(results, pageable(page, size)));
     }
 
     @PostMapping("/create")
     @PreAuthorize("isAuthenticated()")
+    @Transactional
     public ResponseEntity<?> create(
             @RequestParam String title,
             @RequestParam(required = false) String description,
             @RequestParam Long regionId,
             @RequestParam Long categoryId,
-            @RequestParam(required = false) Long materialId,
-            @RequestParam(required = false) Long techniqueId,
+            @RequestParam(required = false) String materialId,
+            @RequestParam(required = false) String techniqueId,
             @RequestParam(required = false) MultipartFile image) {
 
         try {
@@ -86,18 +102,52 @@ public class RecordController {
             record.setTitle(title);
             record.setDescription(description);
             record.setDateCreated(LocalDate.now());
-            record.setRegion(regionService.findById(regionId).orElse(null));
-            record.setCategory(categoryService.findById(categoryId).orElse(null));
-            if (materialId != null) record.setMaterial(materialService.findById(materialId).orElse(null));
-            if (techniqueId != null) record.setTechnique(techniqueService.findById(techniqueId).orElse(null));
+            record.setRegion(regionService.findById(regionId)
+                    .orElseThrow(() -> new IllegalArgumentException("Region not found: " + regionId)));
+            record.setCategory(categoryService.findById(categoryId)
+                    .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId)));
+
+            Long parsedMaterialId = parseOptionalId(materialId, "materialId");
+            Long parsedTechniqueId = parseOptionalId(techniqueId, "techniqueId");
+
+            if (parsedMaterialId != null) {
+                record.setMaterial(materialService.findById(parsedMaterialId)
+                        .orElseThrow(() -> new IllegalArgumentException("Material not found: " + parsedMaterialId)));
+            }
+            if (parsedTechniqueId != null) {
+                record.setTechnique(techniqueService.findById(parsedTechniqueId)
+                        .orElseThrow(() -> new IllegalArgumentException("Technique not found: " + parsedTechniqueId)));
+            }
 
             Record saved = recordService.createRecord(record);
             if (image != null && !image.isEmpty()) imageService.uploadImage(image, saved);
 
             return ResponseEntity.ok(recordService.findById(saved.getRecordId()).orElse(saved));
         } catch (Exception e) {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    private Long parseOptionalId(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid " + fieldName + ": " + value);
+        }
+    }
+
+    private Pageable pageable(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        return PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "recordId"));
+    }
+
+    private Page<Record> toPage(List<Record> records, Pageable pageable) {
+        int start = Math.min((int) pageable.getOffset(), records.size());
+        int end = Math.min(start + pageable.getPageSize(), records.size());
+        return new PageImpl<>(records.subList(start, end), pageable, records.size());
     }
 
     /**

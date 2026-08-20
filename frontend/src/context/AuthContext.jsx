@@ -1,24 +1,50 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { jwtDecode } from "jwt-decode";
 
 const AuthContext = createContext(null);
+
+function clearStoredAuth() {
+  sessionStorage.removeItem("user");
+  sessionStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("token");
+}
+
+function isTokenValid(token) {
+  if (!token) return false;
+
+  try {
+    const decoded = jwtDecode(token);
+    return decoded.exp && decoded.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // { username, role }
   const [loading, setLoading] = useState(true);
 
-  // On app load, check if user is already logged in (via stored token)
+  // Keep auth for the current browser session only, and clear old localStorage logins.
   useEffect(() => {
-    const stored = localStorage.getItem("user");
-    
-    if (stored) {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+
+    const token = sessionStorage.getItem("token");
+    const stored = sessionStorage.getItem("user");
+
+    if (stored && isTokenValid(token)) {
       setUser(JSON.parse(stored));
+    } else {
+      clearStoredAuth();
     }
+
     setLoading(false);
   }, []);
 
   const login = (userData, token) => {
-    localStorage.setItem("user", JSON.stringify(userData));
-    localStorage.setItem("token", token);
+    sessionStorage.setItem("user", JSON.stringify(userData));
+    sessionStorage.setItem("token", token);
     setUser(userData);
   };
 
@@ -26,13 +52,12 @@ export function AuthProvider({ children }) {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` },
       });
     } catch (e) {
       // ignore
     }
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
+    clearStoredAuth();
     setUser(null);
   };
 

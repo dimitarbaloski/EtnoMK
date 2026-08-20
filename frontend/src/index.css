@@ -768,6 +768,51 @@ textarea {
   min-width: 200px;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 2rem 0 3rem;
+}
+
+.pagination span {
+  color: #5f4327;
+  font-weight: 600;
+}
+
+.pagination .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pagination-page {
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid #d8bf96;
+  border-radius: 6px;
+  background: #fffaf1;
+  color: #5f4327;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.pagination-page:hover {
+  background: #F5E6C8;
+}
+
+.pagination-page.active {
+  background: #7A1C1C;
+  border-color: #7A1C1C;
+  color: white;
+}
+
+.pagination-ellipsis {
+  min-width: 1.25rem;
+  text-align: center;
+}
+
 /* No records */
 .no-records {
   text-align: center;

@@ -26,7 +26,7 @@ export default function Login() {
         },
         data.token
         );
-        navigate("/");
+        navigate("/", { replace: true });
       } else {
         setError(data.message || "Invalid username or password.");
       }

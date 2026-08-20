@@ -1,18 +1,32 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Layout from "../../components/Layout";
+import Pagination from "../../components/Pagination";
 import { recordsApi } from "../../api/api";
 
 export default function SearchResults() {
   const [searchParams] = useSearchParams();
   const keyword = searchParams.get("keyword") || "";
-  const [records, setRecords] = useState([]);
+  const [pageData, setPageData] = useState({ content: [], number: 0, totalPages: 0, totalElements: 0 });
+  const [page, setPage] = useState(0);
+  const pageSize = 9;
 
   useEffect(() => {
     if (keyword) {
-      recordsApi.search(keyword).then(setRecords).catch(() => setRecords([]));
+      recordsApi
+        .search(keyword, page, pageSize)
+        .then(setPageData)
+        .catch(() => setPageData({ content: [], number: 0, totalPages: 0, totalElements: 0 }));
     }
+  }, [keyword, page]);
+
+  useEffect(() => {
+    setPage(0);
   }, [keyword]);
+
+  const records = pageData.content || [];
+  const currentPage = pageData.number || 0;
+  const totalPages = pageData.totalPages || 0;
 
   return (
     <Layout>
@@ -56,6 +70,8 @@ export default function SearchResults() {
           ))}
         </div>
       )}
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
     </Layout>
   );
 }

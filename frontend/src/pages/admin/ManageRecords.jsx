@@ -1,20 +1,32 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../../components/Layout";
+import Pagination from "../../components/Pagination";
 import { recordsApi } from "../../api/api";
 
 export default function ManageRecords() {
-  const [records, setRecords] = useState([]);
+  const [pageData, setPageData] = useState({ content: [], number: 0, totalPages: 0, totalElements: 0 });
+  const [page, setPage] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
-    recordsApi.getAll().then(setRecords).catch(() => setRecords([]));
-  }, []);
+    recordsApi
+      .getAll(page, pageSize)
+      .then(setPageData)
+      .catch(() => setPageData({ content: [], number: 0, totalPages: 0, totalElements: 0 }));
+  }, [page]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure?")) return;
     await recordsApi.delete(id);
-    setRecords(records.filter((r) => r.recordId !== id));
+    const nextPage = pageData.content.length === 1 && page > 0 ? page - 1 : page;
+    if (nextPage !== page) setPage(nextPage);
+    else recordsApi.getAll(page, pageSize).then(setPageData).catch(() => {});
   };
+
+  const records = pageData.content || [];
+  const currentPage = pageData.number || 0;
+  const totalPages = pageData.totalPages || 0;
 
   return (
     <Layout>
@@ -61,6 +73,8 @@ export default function ManageRecords() {
           </table>
         </div>
       )}
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
     </Layout>
   );
 }

@@ -6,6 +6,8 @@ import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.repository.ImagePatternPatchRepository;
 import mk.ukim.finki.etnomk.repository.ImageRepository;
 import mk.ukim.finki.etnomk.service.ImageService;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
@@ -14,11 +16,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -27,7 +33,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +53,6 @@ public class ImageServiceImpl implements ImageService {
     private static final int HEIGHT = 800;
     private static final int MIN_PATTERN_SEARCH_WIDTH = 128;
     private static final int MIN_PATTERN_SEARCH_HEIGHT = 128;
-    private static final String UPLOAD_DIR = "/app/uploads/";
     private static final String SIMILARITY_SERVICE_URL = "http://similarity:5000/embed";
     private static final String PATCH_SIMILARITY_SERVICE_URL = "http://similarity:5000/embed-patches";
 
@@ -58,18 +62,28 @@ public class ImageServiceImpl implements ImageService {
      * balance between recall (not missing genuine matches) and precision
      * (not returning unrelated records). Tune up/down if needed.
      */
-    private static final double MAX_SIMILARITY_DISTANCE = 0.14;
-    private static final double MAX_PATTERN_PATCH_DISTANCE = 0.16;
+    private static final double MAX_SIMILARITY_DISTANCE = 0.10;
+    private static final double MAX_PATTERN_PATCH_DISTANCE = 0.11;
+    private static final double SAME_REGION_DISTANCE_BOOST = 0.002;
 
     private final ImageRepository imageRepository;
     private final ImagePatternPatchRepository imagePatternPatchRepository;
+    private final Path uploadDir;
+    private final TaskExecutor taskExecutor;
+    private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
 
     public ImageServiceImpl(ImageRepository imageRepository,
-                            ImagePatternPatchRepository imagePatternPatchRepository) {
+                            ImagePatternPatchRepository imagePatternPatchRepository,
+                            @Qualifier("embeddingTaskExecutor") TaskExecutor taskExecutor,
+                            TransactionTemplate transactionTemplate,
+                            @Value("${etnomk.upload-dir:uploads}") String uploadDir) {
         this.imageRepository = imageRepository;
         this.imagePatternPatchRepository = imagePatternPatchRepository;
+        this.taskExecutor = taskExecutor;
+        this.transactionTemplate = transactionTemplate;
+        this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
     // ── Public API ────────────────────────────────────────────────────────
@@ -88,40 +102,26 @@ public class ImageServiceImpl implements ImageService {
     @Transactional
     public Image uploadImage(MultipartFile file, Record record) throws IOException {
         BufferedImage originalImage = ImageIO.read(file.getInputStream());
+        if (originalImage == null) {
+            throw new IllegalArgumentException("The uploaded file is not a valid image.");
+        }
         BufferedImage resizedImage = resizeImage(originalImage);
 
         String filename = UUID.randomUUID() + ".jpg";
-        File directory = new File(UPLOAD_DIR);
-        if (!directory.exists()) {
-            directory.mkdirs();
-        }
+        Files.createDirectories(uploadDir);
 
-        File outputFile = new File(UPLOAD_DIR + filename);
-        ImageIO.write(resizedImage, "jpg", outputFile);
+        Path outputPath = uploadDir.resolve(filename);
+        if (!ImageIO.write(resizedImage, "jpg", outputPath.toFile())) {
+            throw new IOException("Could not save uploaded image.");
+        }
 
         Image image = new Image();
         image.setImagePath("/uploads/" + filename);
         image.setRecord(record);
 
-        byte[] imageBytes = Files.readAllBytes(outputFile.toPath());
-
-        try {
-            float[] embedding = requestEmbedding(
-                    imageBytes,
-                    filename,
-                    "image/jpeg"
-            );
-            image.setEmbedding(embedding);
-        } catch (Exception e) {
-            log.warn("Could not generate embedding for uploaded image {}: {}", filename, e.getMessage());
-        }
-
+        byte[] imageBytes = Files.readAllBytes(outputPath);
         Image savedImage = imageRepository.save(image);
-        try {
-            replacePatternPatches(savedImage, requestPatchEmbeddings(imageBytes, filename, "image/jpeg"));
-        } catch (Exception e) {
-            log.warn("Could not generate pattern patches for uploaded image {}: {}", filename, e.getMessage());
-        }
+        scheduleEmbeddingGeneration(savedImage.getImageId(), imageBytes, filename, "image/jpeg");
 
         return savedImage;
     }
@@ -139,8 +139,7 @@ public class ImageServiceImpl implements ImageService {
      * Steps:
      *   1. Get the embedding for the query record.
      *   2. Fetch candidates within MAX_SIMILARITY_DISTANCE from pgvector.
-     *   3. If the query record has a region, restrict candidates to that region.
-     *   4. Sort remaining candidates by visual pattern distance and return.
+     *   3. Rank by visual distance, with a small same-region boost for close ties.
      */
     @Override
     @Transactional
@@ -170,12 +169,12 @@ public class ImageServiceImpl implements ImageService {
         String vectorStr = toVectorString(embedding);
 
         int candidateLimit = Math.max(limit * 4, 40);
-        List<Image> candidates = findCandidates(recordId, queryRegionId, vectorStr, candidateLimit);
+        List<Image> candidates = findCandidates(recordId, vectorStr, candidateLimit);
 
         if (candidates.isEmpty()) {
             int backfilled = backfillMissingEmbeddings();
             if (backfilled == 0) return List.of();
-            candidates = findCandidates(recordId, queryRegionId, vectorStr, candidateLimit);
+            candidates = findCandidates(recordId, vectorStr, candidateLimit);
         }
 
         return reRankByRegion(candidates, queryRegionId, vectorStr, limit);
@@ -211,19 +210,8 @@ public class ImageServiceImpl implements ImageService {
     }
 
     private List<Image> findCandidates(Long recordId,
-                                       Long regionId,
                                        String vectorStr,
                                        int candidateLimit) {
-        if (regionId != null) {
-            return imageRepository.findSimilarInRegion(
-                    recordId,
-                    regionId,
-                    vectorStr,
-                    MAX_SIMILARITY_DISTANCE,
-                    candidateLimit
-            );
-        }
-
         return imageRepository.findSimilar(
                 recordId,
                 vectorStr,
@@ -236,27 +224,34 @@ public class ImageServiceImpl implements ImageService {
                                                             Long regionId,
                                                             int candidateLimit,
                                                             int limit) {
-        record ScoredRecord(Record record, double distance) {}
+        class PatchScore {
+            private final Record record;
+            private double bestDistance;
+            private int matchCount;
 
-        Map<Long, ScoredRecord> bestByRecord = new LinkedHashMap<>();
+            private PatchScore(Record record, double bestDistance) {
+                this.record = record;
+                this.bestDistance = bestDistance;
+                this.matchCount = 1;
+            }
+
+            private void addMatch(double distance) {
+                matchCount++;
+                if (distance < bestDistance) bestDistance = distance;
+            }
+        }
+
+        Map<Long, PatchScore> bestByRecord = new LinkedHashMap<>();
 
         for (PatternPatchEmbedding queryPatch : queryPatches) {
             String vectorStr = toVectorString(queryPatch.embedding());
 
-            List<ImagePatternPatch> matches = regionId != null
-                    ? imagePatternPatchRepository.findSimilarPatchesInRegion(
-                            -1L,
-                            regionId,
-                            vectorStr,
-                            MAX_PATTERN_PATCH_DISTANCE,
-                            candidateLimit
-                    )
-                    : imagePatternPatchRepository.findSimilarPatches(
-                            -1L,
-                            vectorStr,
-                            MAX_PATTERN_PATCH_DISTANCE,
-                            candidateLimit
-                    );
+            List<ImagePatternPatch> matches = imagePatternPatchRepository.findSimilarPatches(
+                    -1L,
+                    vectorStr,
+                    MAX_PATTERN_PATCH_DISTANCE,
+                    candidateLimit
+            );
 
             for (ImagePatternPatch patch : matches) {
                 if (patch.getImage() == null || patch.getImage().getRecord() == null) continue;
@@ -266,17 +261,25 @@ public class ImageServiceImpl implements ImageService {
                 if (recordId == null) continue;
 
                 double distance = cosineDist(patch.getEmbedding(), queryPatch.embedding());
-                ScoredRecord currentBest = bestByRecord.get(recordId);
+                PatchScore currentScore = bestByRecord.get(recordId);
 
-                if (currentBest == null || distance < currentBest.distance()) {
-                    bestByRecord.put(recordId, new ScoredRecord(record, distance));
+                if (currentScore == null) {
+                    bestByRecord.put(recordId, new PatchScore(record, distance));
+                } else {
+                    currentScore.addMatch(distance);
                 }
             }
         }
 
+        int minimumMatches = queryPatches.size() > 1 ? 2 : 1;
+
         return bestByRecord.values().stream()
-                .sorted(Comparator.comparingDouble(ScoredRecord::distance))
-                .map(ScoredRecord::record)
+                .filter(score -> score.matchCount >= minimumMatches)
+                .sorted(Comparator.comparingDouble(score -> boostedDistance(
+                        score.bestDistance,
+                        isSameRegion(score.record, regionId)
+                )))
+                .map(score -> score.record)
                 .limit(limit)
                 .toList();
     }
@@ -286,9 +289,9 @@ public class ImageServiceImpl implements ImageService {
     /**
      * Re-rank a visual candidate list with region preference.
      *
-     * The database query already filters by pattern similarity and, when a
-     * query region is known, restricts results to that region. This method
-     * keeps the final result distinct by record and ordered by visual distance.
+     * The database query fetches visual candidates globally. This method keeps
+     * the final result distinct by record and ordered by visual distance, with
+     * a small same-region boost for close matches.
      */
     private List<Record> reRankByRegion(List<Image> candidates,
                                         Long queryRegionId,
@@ -316,12 +319,9 @@ public class ImageServiceImpl implements ImageService {
             scored.add(new ScoredRecord(rec, distance, sameRegion));
         }
 
-        Comparator<ScoredRecord> comparator = Comparator.comparingDouble(ScoredRecord::distance);
-        if (queryRegionId != null) {
-            comparator = Comparator
-                    .comparing((ScoredRecord s) -> !s.sameRegion())
-                    .thenComparingDouble(ScoredRecord::distance);
-        }
+        Comparator<ScoredRecord> comparator = Comparator.comparingDouble(
+                score -> boostedDistance(score.distance(), score.sameRegion())
+        );
 
         Map<Long, Record> uniqueByRecord = new LinkedHashMap<>();
         scored.stream()
@@ -334,6 +334,18 @@ public class ImageServiceImpl implements ImageService {
         return uniqueByRecord.values().stream()
                 .limit(limit)
                 .toList();
+    }
+
+    private boolean isSameRegion(Record record, Long queryRegionId) {
+        return queryRegionId != null
+                && record != null
+                && record.getRegion() != null
+                && queryRegionId.equals(record.getRegion().getRegionId());
+    }
+
+    private double boostedDistance(double distance, boolean sameRegion) {
+        if (!sameRegion) return distance;
+        return Math.max(0.0, distance - SAME_REGION_DISTANCE_BOOST);
     }
 
     // ── Admin / maintenance ───────────────────────────────────────────────
@@ -455,7 +467,47 @@ public class ImageServiceImpl implements ImageService {
         String normalized = imagePath.startsWith("/uploads/")
                 ? imagePath.substring("/uploads/".length())
                 : imagePath;
-        return Path.of(UPLOAD_DIR, normalized);
+        return uploadDir.resolve(normalized).normalize();
+    }
+
+    private void scheduleEmbeddingGeneration(Long imageId, byte[] imageBytes, String filename, String contentType) {
+        Runnable task = () -> taskExecutor.execute(
+                () -> generateEmbeddingsForImage(imageId, imageBytes, filename, contentType)
+        );
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+        } else {
+            task.run();
+        }
+    }
+
+    private void generateEmbeddingsForImage(Long imageId, byte[] imageBytes, String filename, String contentType) {
+        try {
+            float[] embedding = requestEmbedding(imageBytes, filename, contentType);
+            transactionTemplate.executeWithoutResult(status ->
+                    imageRepository.findById(imageId).ifPresent(image -> {
+                        image.setEmbedding(embedding);
+                        imageRepository.save(image);
+                    })
+            );
+        } catch (Exception e) {
+            log.warn("Could not generate embedding for uploaded image {}: {}", filename, e.getMessage());
+        }
+
+        try {
+            List<PatternPatchEmbedding> patches = requestPatchEmbeddings(imageBytes, filename, contentType);
+            transactionTemplate.executeWithoutResult(status ->
+                    imageRepository.findById(imageId).ifPresent(image -> replacePatternPatches(image, patches))
+            );
+        } catch (Exception e) {
+            log.warn("Could not generate pattern patches for uploaded image {}: {}", filename, e.getMessage());
+        }
     }
 
     private void replacePatternPatches(Image image, List<PatternPatchEmbedding> patchEmbeddings) {

@@ -22,12 +22,16 @@ export default function CreateRecord() {
     e.preventDefault();
     setError("");
     const formData = new FormData(e.target);
+    ["materialId", "techniqueId"].forEach((field) => {
+      if (!formData.get(field)) formData.delete(field);
+    });
+
     try {
       const data = await recordsApi.create(formData);
       if (data.recordId) navigate(`/records/${data.recordId}`);
       else setError(data.message || "Failed to create record.");
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
     }
   };
 

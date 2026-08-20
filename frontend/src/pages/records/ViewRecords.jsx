@@ -1,33 +1,50 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Layout from "../../components/Layout";
+import Pagination from "../../components/Pagination";
 import { recordsApi, regionsApi, categoriesApi } from "../../api/api";
 
 export default function ViewRecords() {
-  const [records, setRecords] = useState([]);
+  const [pageData, setPageData] = useState({ content: [], number: 0, totalPages: 0, totalElements: 0 });
   const [regions, setRegions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [keyword, setKeyword] = useState("");
   const [regionId, setRegionId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [activeFilter, setActiveFilter] = useState({ regionId: "", categoryId: "" });
+  const [page, setPage] = useState(0);
   const navigate = useNavigate();
+  const pageSize = 9;
 
   useEffect(() => {
-    recordsApi.getAll().then(setRecords).catch(() => setRecords([]));
     regionsApi.getAll().then(setRegions).catch(() => setRegions([]));
     categoriesApi.getAll().then(setCategories).catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    const request = activeFilter.regionId || activeFilter.categoryId
+      ? recordsApi.filter(activeFilter.regionId, activeFilter.categoryId, page, pageSize)
+      : recordsApi.getAll(page, pageSize);
+
+    request
+      .then(setPageData)
+      .catch(() => setPageData({ content: [], number: 0, totalPages: 0, totalElements: 0 }));
+  }, [activeFilter, page]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (keyword.trim()) navigate(`/records/search?keyword=${encodeURIComponent(keyword)}`);
   };
 
-  const handleFilter = async (e) => {
+  const handleFilter = (e) => {
     e.preventDefault();
-    const data = await recordsApi.filter(regionId, categoryId);
-    setRecords(data);
+    setPage(0);
+    setActiveFilter({ regionId, categoryId });
   };
+
+  const records = pageData.content || [];
+  const currentPage = pageData.number || 0;
+  const totalPages = pageData.totalPages || 0;
 
   return (
     <Layout>
@@ -97,6 +114,8 @@ export default function ViewRecords() {
           ))}
         </div>
       )}
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} />
     </Layout>
   );
 }

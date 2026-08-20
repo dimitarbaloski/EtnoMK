@@ -3,6 +3,8 @@ package mk.ukim.finki.etnomk.service.impl;
 import mk.ukim.finki.etnomk.model.Record;
 import mk.ukim.finki.etnomk.repository.RecordRepository;
 import mk.ukim.finki.etnomk.service.RecordService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,6 +22,11 @@ public class RecordServiceImpl implements RecordService {
     @Override
     public List<Record> findAll() {
         return recordRepository.findAll();
+    }
+
+    @Override
+    public Page<Record> findAll(Pageable pageable) {
+        return recordRepository.findAll(pageable);
     }
 
     @Override
@@ -55,5 +62,10 @@ public class RecordServiceImpl implements RecordService {
     @Override
     public List<Record> searchRecords(String keyword) {
         return recordRepository.findByTitleContainingIgnoreCase(keyword);
+    }
+
+    @Override
+    public Page<Record> searchRecords(String keyword, Pageable pageable) {
+        return recordRepository.findByTitleContainingIgnoreCase(keyword, pageable);
     }
 }

@@ -15,7 +15,17 @@ export default function EditRecord() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    recordsApi.getById(id).then((data) => { setRecord(data); setForm(data); }).catch(() => {});
+    recordsApi.getById(id).then((data) => {
+      setRecord(data);
+      setForm({
+        title: data.title || "",
+        description: data.description || "",
+        regionId: data.region?.regionId || "",
+        categoryId: data.category?.categoryId || "",
+        materialId: data.material?.materialId || "",
+        techniqueId: data.technique?.techniqueId || "",
+      });
+    }).catch(() => {});
     regionsApi.getAll().then(setRegions).catch(() => {});
     categoriesApi.getAll().then(setCategories).catch(() => {});
     materialsApi.getAll().then(setMaterials).catch(() => {});
@@ -33,12 +43,12 @@ export default function EditRecord() {
         description: form.description,
         regionId: form.regionId,
         categoryId: form.categoryId,
-        materialId: form.materialId || null,
-        techniqueId: form.techniqueId || null,
+        materialId: form.materialId || "",
+        techniqueId: form.techniqueId || "",
       });
       navigate("/admin/records");
-    } catch {
-      setError("Failed to update record.");
+    } catch (err) {
+      setError(err.message || "Failed to update record.");
     }
   };
 
@@ -69,13 +79,13 @@ export default function EditRecord() {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="regionId">Region</label>
-              <select id="regionId" name="regionId" value={form.regionId || record.region?.regionId || ""} onChange={handleChange} required>
+              <select id="regionId" name="regionId" value={form.regionId || ""} onChange={handleChange} required>
                 {regions.map((r) => <option key={r.regionId} value={r.regionId}>{r.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label htmlFor="categoryId">Category</label>
-              <select id="categoryId" name="categoryId" value={form.categoryId || record.category?.categoryId || ""} onChange={handleChange} required>
+              <select id="categoryId" name="categoryId" value={form.categoryId || ""} onChange={handleChange} required>
                 {categories.map((c) => <option key={c.categoryId} value={c.categoryId}>{c.name}</option>)}
               </select>
             </div>
@@ -84,14 +94,14 @@ export default function EditRecord() {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="materialId">Material</label>
-              <select id="materialId" name="materialId" value={form.materialId || record.material?.materialId || ""} onChange={handleChange}>
+              <select id="materialId" name="materialId" value={form.materialId || ""} onChange={handleChange}>
                 <option value="">Select Material</option>
                 {materials.map((m) => <option key={m.materialId} value={m.materialId}>{m.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label htmlFor="techniqueId">Technique</label>
-              <select id="techniqueId" name="techniqueId" value={form.techniqueId || record.technique?.techniqueId || ""} onChange={handleChange}>
+              <select id="techniqueId" name="techniqueId" value={form.techniqueId || ""} onChange={handleChange}>
                 <option value="">Select Technique</option>
                 {techniques.map((t) => <option key={t.techniqueId} value={t.techniqueId}>{t.name}</option>)}
               </select>

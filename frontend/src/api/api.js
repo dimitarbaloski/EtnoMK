@@ -1,7 +1,7 @@
 const BASE_URL = "http://localhost:8080/api";
 
 function getToken() {
-  return localStorage.getItem("token");
+  return sessionStorage.getItem("token");
 }
 
 function authHeaders() {
@@ -9,6 +9,34 @@ function authHeaders() {
     "Content-Type": "application/json",
     Authorization: `Bearer ${getToken()}`,
   };
+}
+
+async function jsonOrThrow(response) {
+  const text = await response.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || `Request failed with status ${response.status}`);
+  }
+
+  return data;
+}
+
+function withParams(path, params) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.append(key, value);
+    }
+  });
+  return `${BASE_URL}${path}?${searchParams.toString()}`;
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -30,8 +58,8 @@ export const authApi = {
 
 // ── Records ───────────────────────────────────────────
 export const recordsApi = {
-  getAll: () =>
-    fetch(`${BASE_URL}/records`).then((r) => r.json()),
+  getAll: (page = 0, size = 9) =>
+    fetch(withParams("/records", { page, size })).then((r) => r.json()),
 
   getById: (id) =>
     fetch(`${BASE_URL}/records/${id}`).then((r) => r.json()),
@@ -62,25 +90,25 @@ export const recordsApi = {
       ).then((r) => r.json());
   },
 
-  search: (keyword) =>
-    fetch(`${BASE_URL}/records/search?keyword=${encodeURIComponent(keyword)}`).then((r) => r.json()),
+  search: (keyword, page = 0, size = 9) =>
+    fetch(withParams("/records/search", { keyword, page, size })).then((r) => r.json()),
 
-  filter: (regionId, categoryId) =>
-    fetch(`${BASE_URL}/records/filter?regionId=${regionId || ""}&categoryId=${categoryId || ""}`).then((r) => r.json()),
+  filter: (regionId, categoryId, page = 0, size = 9) =>
+    fetch(withParams("/records/filter", { regionId, categoryId, page, size })).then((r) => r.json()),
 
   create: (formData) =>
     fetch(`${BASE_URL}/records/create`, {
       method: "POST",
       headers: { Authorization: `Bearer ${getToken()}` },
       body: formData,
-    }).then((r) => r.json()),
+    }).then(jsonOrThrow),
 
   update: (id, data) =>
     fetch(`${BASE_URL}/admin/records/edit/${id}`, {
       method: "PUT",
       headers: authHeaders(),
       body: JSON.stringify(data),
-    }).then((r) => r.json()),
+    }).then(jsonOrThrow),
 
   delete: (id) =>
     fetch(`${BASE_URL}/admin/records/delete/${id}`, {

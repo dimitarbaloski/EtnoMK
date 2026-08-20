@@ -10,14 +10,17 @@ BEGIN
     ) THEN
         IF EXISTS (
             SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'images'
-              AND column_name = 'embedding'
-              AND udt_name <> 'vector'
+            FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = 'images'
+              AND a.attname = 'embedding'
+              AND format_type(a.atttypid, a.atttypmod) <> 'vector(1536)'
         ) THEN
-            ALTER TABLE public.images DROP COLUMN embedding;
-            ALTER TABLE public.images ADD COLUMN embedding vector(1536);
+            ALTER TABLE public.images
+                ALTER COLUMN embedding TYPE vector(1536)
+                USING NULL::vector(1536);
         ELSIF NOT EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -42,4 +45,22 @@ CREATE TABLE IF NOT EXISTS public.image_pattern_patches (
 
 CREATE INDEX IF NOT EXISTS idx_image_pattern_patches_image_id
     ON public.image_pattern_patches(image_id);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = 'image_pattern_patches'
+          AND a.attname = 'embedding'
+          AND format_type(a.atttypid, a.atttypmod) <> 'vector(1536)'
+    ) THEN
+        ALTER TABLE public.image_pattern_patches
+            ALTER COLUMN embedding TYPE vector(1536)
+            USING NULL::vector(1536);
+    END IF;
+END $$;
 
